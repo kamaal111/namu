@@ -1,0 +1,38 @@
+class Namu < Formula
+  desc "Create, open, list and delete Git worktrees"
+  homepage "https://github.com/kamaal111/namu"
+  version "@VERSION@"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/kamaal111/namu/releases/download/v@VERSION@/namu_@VERSION@_darwin_arm64.tar.gz"
+      sha256 "@SHA_DARWIN_ARM64@"
+    end
+    on_intel do
+      url "https://github.com/kamaal111/namu/releases/download/v@VERSION@/namu_@VERSION@_darwin_amd64.tar.gz"
+      sha256 "@SHA_DARWIN_AMD64@"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://github.com/kamaal111/namu/releases/download/v@VERSION@/namu_@VERSION@_linux_arm64.tar.gz"
+      sha256 "@SHA_LINUX_ARM64@"
+    end
+    on_intel do
+      url "https://github.com/kamaal111/namu/releases/download/v@VERSION@/namu_@VERSION@_linux_amd64.tar.gz"
+      sha256 "@SHA_LINUX_AMD64@"
+    end
+  end
+
+  depends_on "git"
+
+  def install
+    bin.install "namu"
+  end
+
+  test do
+    assert_equal "namu version #{version}", shell_output("#{bin}/namu --version").strip
+    assert_match "Git worktrees", shell_output("#{bin}/namu --help")
+  end
+end

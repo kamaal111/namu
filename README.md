@@ -1,0 +1,161 @@
+# namu
+
+A Go CLI to create, open, list and delete Git worktrees from any project.
+Git is the source of truth; no daemon, database, or project configuration is required.
+
+## Install
+
+Requires Git on `PATH`. Supported release targets are macOS and Linux, ARM64 and AMD64.
+
+Once the first release and tap formula are published:
+
+```sh
+brew install kamaal111/tap/namu
+```
+
+Or install with Go 1.27.3 or later after this repository is published:
+
+```sh
+go install github.com/kamaal111/namu/cmd/namu@latest
+```
+
+For a local build today:
+
+```sh
+just build
+mkdir -p "$HOME/.local/bin"
+install -m 755 bin/namu "$HOME/.local/bin/namu"
+```
+
+Add `~/.local/bin` to your `PATH`. Release archives contain a single executable;
+verify the archive against `checksums.txt`, extract it, and install it the same way.
+See [release instructions](docs/releases.md) for publishing and Homebrew setup.
+
+## Worktrees
+
+Run commands from anywhere inside a normal Git checkout, including a linked worktree.
+
+```sh
+namu create feature/cards
+namu create feature/pricing --base feature/cards
+namu create feature/release --remote upstream
+namu open feature/cards
+namu open origin/feature/search
+namu open
+namu list
+namu delete feature/cards
+```
+
+- `create BRANCH` creates a **new** branch. It fetches `origin` (or the sole remote)
+  and branches from that remote's advertised default branch. Multiple remotes without
+  `origin` require `--remote NAME`. Offline work uses `--base REF`, which resolves a
+  local branch, remote-tracking ref, tag, or commit without fetching. `--base` and
+  `--remote` cannot be combined.
+- New checkouts live under the **main checkout's** `.agents/worktrees/BRANCH`.
+  Slashes are preserved: `feature/cards` becomes `.agents/worktrees/feature/cards`.
+  Namu adds this directory to the shared local Git excludes, leaving tracked files
+  unchanged. Existing destination paths and symlink components are refused.
+- `open BRANCH` opens an existing local or known remote branch. It prints the path
+  of any registered checkout already using the branch, including external checkouts
+  and the main checkout. Otherwise it creates a managed checkout. A remote-only
+  branch creates a local tracking branch; local branches take precedence. Explicit
+  arguments never fetch. Ambiguous remote-only names require a remote-qualified name.
+- `open` without an argument fetches configured remotes and shows a fuzzy branch
+  picker. Failed fetches warn and preserve known refs. Use arrows or Ctrl+P/Ctrl+N
+  to move, Enter to select, Escape to leave, or Ctrl+C to cancel. Symbolic remote HEAD
+  refs and `gitbutler/workspace` are excluded. Input and stderr must be terminals;
+  stdout can be redirected.
+- `list` shows every registered worktree, its branch, absolute path, commit, and
+  detached/locked/prunable state. It does not fetch or prune anything.
+- `delete BRANCH` removes only a matching registered managed checkout and **retains
+  its branch**. Dirty tracked files, untracked files, locks, external checkouts, the
+  main checkout, and the invoking checkout prevent removal. Ignored files are removed
+  with the checkout. Stop checkout-specific services yourself before deleting it.
+
+Bare repositories are unsupported. Create an initial commit before creating/opening
+branches. Git locks and conflicts are surfaced without force, branch deletion,
+checkout replacement, or automatic rollback.
+
+## Paths and shell use
+
+`create` and `open` write exactly one absolute path and a newline to stdout as soon
+as Git creates or identifies the checkout, before file copying or setup. All picker,
+setup, progress, and error output goes to stderr.
+
+A CLI cannot change its parent shell's directory. Use the exit status when composing
+commands, because setup can fail **after** a path has been printed:
+
+```sh
+if checkout=$(namu open feature/cards); then
+  cd -- "$checkout"
+fi
+```
+
+Successful commands and Escape cancellation exit 0; errors exit 1; Ctrl+C exits 130.
+Escape cancellation prints no path. Repository paths containing newlines can be
+listed, but newline-terminated path output is intended for ordinary checkout paths.
+
+## Optional project setup
+
+Add `.namu.toml` to the checkout from which you invoke Namu:
+
+```toml
+[setup]
+command = ["just", "setup-worktree"]
+```
+
+The command is an argv array, executed directly in the new checkout with the inherited
+environment. Shell expressions require an explicit shell command, such as
+`["sh", "-c", "pnpm install && pnpm build"]`. Setup receives no interactive stdin.
+Missing configuration means no hook; unknown keys or invalid TOML fail before creation.
+The hook's executable and supporting files must be present in the selected base.
+
+To copy ignored local files before the hook runs, add `.worktreeinclude`:
+
+```gitignore
+# Independent copies of local development configuration
+.env*
+!.env.production
+config/secrets.json
+```
+
+Rules support gitignore-style globs, anchors, comments, directory patterns, and `!`
+exclusions, matching Herdr's opt-in workflow. Only matching **gitignored, untracked,
+regular files** from the invoking checkout are copied, even when that checkout is
+linked. Files inside wholly ignored directories can match. File permissions are
+preserved, and newly created directories are private. Existing destination entries
+and destination tracked paths are preserved, including deleted tracked files.
+Symlinks are never followed; special files, nested repositories, and Git metadata
+are excluded. Missing or empty rules do nothing.
+
+Copy failures preserve successful copies, skip the hook, and fail the command.
+Hook failures also fail the command. In either case the branch and worktree remain
+available, and the path has already been printed. Fix the issue and retry from the
+original source checkout:
+
+```sh
+namu setup feature/cards
+```
+
+An explicit retry reruns copying and the hook. Hooks should therefore tolerate
+repeated execution. Opening an existing checkout does not copy or run setup again.
+Project-specific ports, environment rewriting, dependency installation, and services
+belong in the project hook; Namu does not implement them itself.
+
+## Development
+
+Use Go 1.27.3, Git, Python 3.10+, and optionally `just`:
+
+```sh
+just test
+just check
+just build
+just package v0.1.0
+```
+
+`just check` checks formatting, verifies modules, runs vet, Go tests, race tests,
+`govulncheck`, release-tool tests, and CGO-disabled builds for all four targets.
+Vulnerability checks require network access. Integration tests create isolated local
+Git repositories and bare remotes; they do not use accounts or network remotes.
+The optional picker uses the same Cobra/Charm stack as `agent-vm`; only its Gitignore
+matcher is imported from go-git, while Git itself performs repository operations.
