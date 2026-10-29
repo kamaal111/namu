@@ -14,11 +14,12 @@ Use Conventional Commits. Release Please updates `version.txt`, the manifest, an
 `fix:` increments patch and `feat:` increments minor. Do not leave a persistent
 `release-as` override in the release configuration.
 
-The manifest's initial `0.1.0` is the baseline used to calculate the first automated
-release; without a bootstrap override, initial features can therefore propose a later
-version. To publish exactly `v0.1.0` first, add `release-as: 0.1.0` to the package's
-Release Please configuration for the bootstrap release PR only, then remove it for
-subsequent releases. The archive scripts always require the tag and version file to agree.
+Before the first release, the manifest uses `0.0.0` as its baseline. Merging
+an initial `feat:` commit opens the Release Please PR for `v0.1.0`; merge that
+release PR to publish the tag and build its archives. No application behavior
+change or persistent `release-as` override is needed. After publication, Release
+Please maintains the manifest automatically. The archive scripts always require
+the tag and version file to agree.
 
 The release workflow explicitly dispatches checks on generated release branches,
 because PRs created with the default Actions token do not trigger ordinary PR workflows.
