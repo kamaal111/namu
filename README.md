@@ -38,6 +38,7 @@ namu open origin/feature/search
 namu open
 namu list
 namu delete feature/cards
+namu delete feature/pricing feature/release
 ```
 
 - `create BRANCH` creates a **new** branch. It fetches `origin` (or the sole remote)
@@ -61,9 +62,11 @@ namu delete feature/cards
   stdout can be redirected.
 - `list` shows every registered worktree, its branch, absolute path, commit, and
   detached/locked/prunable state. It does not fetch or prune anything.
-- `delete BRANCH` removes only a matching registered managed checkout and **retains
-  its branch**. Dirty tracked files, untracked files, locks, external checkouts, the
-  main checkout, and the invoking checkout prevent removal. Ignored files are removed
+- `delete BRANCH [BRANCH...]` removes matching registered managed checkouts and
+  **retains their branches**. Each unique branch is attempted in argument order;
+  failures are reported together and make the command exit 1, while remaining
+  branches are still attempted. Dirty tracked files, untracked files, locks, external
+  checkouts, the main checkout, and the invoking checkout prevent removal. Ignored files are removed
   with the checkout. Stop checkout-specific services yourself before deleting it.
 
 Bare repositories are unsupported. Create an initial commit before creating/opening
@@ -105,8 +108,32 @@ Herdr documents detection and worktree commands in its
 as Git creates or identifies the checkout, before file copying or setup. All picker,
 setup, progress, and error output goes to stderr.
 
-To enter the checkout automatically after successful `create` or `open`, load the
-shell integration in your current shell or add it to your shell startup file:
+On your first interactive `create` or `open` with focus enabled, Namu offers to
+install shell integration so future commands enter the checkout automatically.
+It shows each startup file's absolute path and the exact text it will append,
+then asks for confirmation (default: No). After installation it reports each
+changed file and the exact text added. Existing configuration is preserved;
+repeated installation does not add duplicate initialization.
+
+Zsh uses `$ZDOTDIR/.zshrc` or `~/.zshrc`. Bash uses `~/.bashrc` and the first
+existing login file among `~/.bash_profile`, `~/.bash_login`, and `~/.profile`,
+creating `~/.bash_profile` if none exists. Symlinked startup files are updated
+at their resolved destinations, which are shown in the preview and report.
+Declining leaves startup files untouched and continues the worktree command.
+Scripts, redirected commands, unsupported shells, and `--no-focus` never trigger
+automatic installation.
+
+Reload once with `exec zsh` or `exec bash`, as instructed after installation.
+The installing invocation cannot change its parent shell's directory. You can
+also install explicitly; these commands authorize the displayed file edits:
+
+```sh
+namu shell-init zsh --install
+namu shell-init bash --install
+```
+
+For a temporary setup without editing startup files, load the integration in your
+current shell:
 
 ```sh
 # Zsh (~/.zshrc)

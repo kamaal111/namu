@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -11,7 +12,6 @@ import (
 	"github.com/kamaal111/namu/internal/ui"
 	"github.com/kamaal111/namu/internal/worktree"
 	"github.com/spf13/cobra"
-	"golang.org/x/sys/unix"
 )
 
 // Version is set by release builds.
@@ -117,12 +117,26 @@ func New(dir string) *cobra.Command {
 		}
 		return w.Flush()
 	}}
-	remove := &cobra.Command{Use: "delete BRANCH", Short: "Remove a clean managed checkout, retaining its branch", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	remove := &cobra.Command{Use: "delete BRANCH [BRANCH...]", Short: "Remove clean managed checkouts, retaining their branches", Args: cobra.MinimumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		s, err := service(cmd, dir)
 		if err != nil {
 			return err
 		}
-		return s.Delete(cmd.Context(), args[0])
+		seen := make(map[string]bool)
+		var failures []error
+		for _, branch := range args {
+			if err := cmd.Context().Err(); err != nil {
+				return errors.Join(append(failures, err)...)
+			}
+			if seen[branch] {
+				continue
+			}
+			seen[branch] = true
+			if err := s.Delete(cmd.Context(), branch); err != nil {
+				failures = append(failures, fmt.Errorf("%s: %w", branch, err))
+			}
+		}
+		return errors.Join(failures...)
 	}}
 	setup := &cobra.Command{Use: "setup BRANCH", Short: "Retry copying and setup from the original source checkout", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		s, err := service(cmd, dir)
@@ -132,6 +146,7 @@ func New(dir string) *cobra.Command {
 		return s.Setup(cmd.Context(), args[0])
 	}}
 	for _, cmd := range []*cobra.Command{create, open} {
+		cmd.PreRunE = autoShellInstall
 		cmd.Flags().Bool("herdr", false, "Use Herdr (automatic inside Herdr; --herdr=false disables)")
 		cmd.Flags().Bool("focus", true, "Focus the workspace and change directory with shell integration")
 		cmd.Flags().Bool("no-focus", false, "Keep current workspace and shell directory")
@@ -144,17 +159,7 @@ func interactive(cmd *cobra.Command) bool {
 	if os.Getenv("TERM") == "dumb" {
 		return false
 	}
-	input, ok := cmd.InOrStdin().(*os.File)
-	if !ok {
-		return false
-	}
-	output, ok := cmd.ErrOrStderr().(*os.File)
-	if !ok {
-		return false
-	}
-	_, inErr := unix.IoctlGetTermios(int(input.Fd()), terminalRequest())
-	_, outErr := unix.IoctlGetTermios(int(output.Fd()), terminalRequest())
-	return inErr == nil && outErr == nil
+	return terminalStream(cmd.InOrStdin()) && terminalStream(cmd.ErrOrStderr())
 }
 
 func version() string {
