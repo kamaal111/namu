@@ -1,7 +1,7 @@
 namu() {
   case "${1-}" in
     create|open) ;;
-    *) command namu "$@"; return $? ;;
+    *) NAMU_SHELL_INTEGRATION=1 command namu "$@"; return $? ;;
   esac
   local namu_arg namu_path namu_result namu_focus=1 namu_skip=0
   for namu_arg in "$@"; do
@@ -12,16 +12,16 @@ namu() {
     case "$namu_arg" in
       --) break ;;
       --base|--remote) namu_skip=1 ;;
-      --help|--help=true|-h|-h=true) command namu "$@"; return $? ;;
+      --help|--help=true|-h|-h=true) NAMU_SHELL_INTEGRATION=1 command namu "$@"; return $? ;;
       --no-focus|--no-focus=true|--focus=false) namu_focus=0 ;;
       --focus|--focus=true|--no-focus=false) namu_focus=1 ;;
     esac
   done
   if [ "$namu_focus" = 0 ]; then
-    command namu "$@"
+    NAMU_SHELL_INTEGRATION=1 command namu "$@"
     return $?
   fi
-  if namu_path=$(command namu "$@"); then
+  if namu_path=$(NAMU_SHELL_INTEGRATION=1 command namu "$@"); then
     namu_result=0
   else
     namu_result=$?

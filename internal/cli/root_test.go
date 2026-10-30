@@ -66,3 +66,65 @@ func TestCreateRejectsEmptyBaseAndConflictingFlags(t *testing.T) {
 	_, _, err = execute(t, t.TempDir(), "create", "feature/cards", "--base", "main", "--remote", "origin")
 	check(t, err != nil, "conflicting flags must fail")
 }
+
+func TestDeleteMultipleManagedCheckoutsAndRetainBranches(t *testing.T) {
+	t.Setenv("HERDR_ENV", "")
+	repo := testutil.Repository(t)
+	branches := []string{"fix/initial-release-version", "feat/initial-release", "chore/mise-setup", "herdr-setup"}
+	for _, branch := range branches {
+		_, _, err := execute(t, repo.Source, "create", branch, "--base", "main")
+		must(t, err)
+	}
+	out, diagnostics, err := execute(t, repo.Source, append([]string{"delete"}, branches...)...)
+	must(t, err)
+	check(t, out == "", out)
+	check(t, strings.Count(diagnostics, "Removed ") == 4, diagnostics)
+	for _, branch := range branches {
+		_, err := os.Stat(filepath.Join(repo.Main, ".agents/worktrees", branch))
+		check(t, os.IsNotExist(err), "checkout must be removed")
+		check(t, testutil.Git(t, repo.Source, "branch", "--list", branch) != "", "branch must remain")
+	}
+}
+
+func TestDeleteContinuesAfterFailuresAndDeduplicates(t *testing.T) {
+	t.Setenv("HERDR_ENV", "")
+	repo := testutil.Repository(t)
+	for _, branch := range []string{"feature/cards", "feature/dirty", "feature/locked", "feature/last"} {
+		_, _, err := execute(t, repo.Source, "create", branch, "--base", "main")
+		must(t, err)
+	}
+	dirty := filepath.Join(repo.Main, ".agents/worktrees/feature/dirty")
+	testutil.Write(t, filepath.Join(dirty, "untracked"), "keep")
+	locked := filepath.Join(repo.Main, ".agents/worktrees/feature/locked")
+	testutil.Git(t, repo.Source, "worktree", "lock", locked)
+	external := filepath.Join(t.TempDir(), "external")
+	testutil.Git(t, repo.Source, "worktree", "add", "-b", "feature/external", external)
+	out, diagnostics, err := execute(t, repo.Source, "delete", "feature/cards", "feature/cards", "feature/dirty", "feature/locked", "feature/external", "missing", "main", "feature/last")
+	check(t, err != nil, "any failure must fail the batch")
+	check(t, out == "", out)
+	check(t, strings.Count(diagnostics, "Removed ") == 2, diagnostics)
+	for _, branch := range []string{"feature/dirty", "feature/locked", "feature/external", "missing", "main"} {
+		check(t, strings.Contains(err.Error(), branch), err.Error())
+	}
+	for _, path := range []string{dirty, locked, external, repo.Main} {
+		_, err := os.Stat(path)
+		must(t, err)
+	}
+	_, _, err = execute(t, repo.Source, "delete")
+	check(t, err != nil, "missing argument must fail")
+}
+
+func TestDeleteProtectsInvokingCheckoutAndContinues(t *testing.T) {
+	t.Setenv("HERDR_ENV", "")
+	repo := testutil.Repository(t)
+	for _, branch := range []string{"feature/current", "feature/other"} {
+		_, _, err := execute(t, repo.Source, "create", branch, "--base", "main")
+		must(t, err)
+	}
+	current := filepath.Join(repo.Main, ".agents/worktrees/feature/current")
+	_, diagnostics, err := execute(t, current, "delete", "feature/current", "feature/other")
+	check(t, err != nil && strings.Contains(err.Error(), "cannot delete the invoking checkout"), "must protect invoking checkout")
+	check(t, strings.Contains(diagnostics, "feature/other retained"), diagnostics)
+	_, err = os.Stat(current)
+	must(t, err)
+}
