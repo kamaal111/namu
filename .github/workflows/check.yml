@@ -23,4 +23,9 @@ jobs:
           mise exec -- go version
           mise exec -- python3 --version
           mise exec -- just --version
+      - name: Install shell integration test dependency
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh
       - run: just check

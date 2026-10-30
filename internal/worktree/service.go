@@ -17,6 +17,8 @@ import (
 
 type Service struct {
 	Repo     git.Repo
+	Herdr    bool
+	NoFocus  bool
 	Out, Err io.Writer
 }
 
@@ -92,7 +94,8 @@ func (s *Service) prepare(ctx context.Context, branch string) (string, config.Co
 	}
 	return path, cfg, nil
 }
-func (s *Service) createAt(ctx context.Context, branch, path string, args []string, cfg config.Config) error {
+func (s *Service) createAt(ctx context.Context, request git.WorktreeRequest, revision, upstream string, cfg config.Config) error {
+	branch, path := request.Branch, request.Path
 	if _, err := s.path(ctx, branch); err != nil {
 		return err
 	}
@@ -102,7 +105,16 @@ func (s *Service) createAt(ctx context.Context, branch, path string, args []stri
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	if _, err := git.Run(ctx, s.Repo.Source, append([]string{"worktree", "add"}, args...)...); err != nil {
+	if s.Herdr {
+		if err := s.createHerdr(ctx, request, revision); err != nil {
+			return err
+		}
+		if upstream != "" {
+			if _, err := git.Run(ctx, s.Repo.Source, "branch", "--set-upstream-to="+upstream, "--", branch); err != nil {
+				return fmt.Errorf("checkout preserved at %s; cannot configure upstream: %w", path, err)
+			}
+		}
+	} else if err := git.AddWorktree(ctx, s.Repo.Source, request); err != nil {
 		return err
 	}
 	return s.afterCreate(ctx, branch, path, cfg)
@@ -114,7 +126,7 @@ func (s *Service) Create(ctx context.Context, branch, base, remote string) error
 	if err := git.ValidateBranch(ctx, s.Repo.Source, branch); err != nil {
 		return err
 	}
-	if exists, err := s.localExists(ctx, branch); err != nil {
+	if exists, err := git.LocalBranchExists(ctx, s.Repo.Source, branch); err != nil {
 		return err
 	} else if exists {
 		return fmt.Errorf("branch %s already exists; use namu open %s", branch, branch)
@@ -129,23 +141,11 @@ func (s *Service) Create(ctx context.Context, branch, base, remote string) error
 			return err
 		}
 	}
-	revision, err := git.Text(ctx, s.Repo.Source, "rev-parse", "--verify", "--end-of-options", base+"^{commit}")
+	revision, err := git.ResolveCommit(ctx, s.Repo.Source, base)
 	if err != nil {
 		return fmt.Errorf("cannot resolve base %q: %w", base, err)
 	}
-	return s.createAt(ctx, branch, path, []string{"-b", branch, "--", path, revision}, cfg)
-}
-func (s *Service) localExists(ctx context.Context, branch string) (bool, error) {
-	text, err := git.Text(ctx, s.Repo.Source, "for-each-ref", "--format=%(refname)", "refs/heads/"+branch)
-	if err != nil {
-		return false, err
-	}
-	for _, line := range strings.Split(text, "\n") {
-		if line == "refs/heads/"+branch {
-			return true, nil
-		}
-	}
-	return false, nil
+	return s.createAt(ctx, git.WorktreeRequest{Branch: branch, Path: path, Base: revision, CreateBranch: true}, revision, "", cfg)
 }
 func (s *Service) Open(ctx context.Context, label string) error {
 	branches, err := git.AllBranches(ctx, s.Repo.Source)
@@ -196,6 +196,14 @@ func (s *Service) Open(ctx context.Context, label string) error {
 			if err != nil {
 				return fmt.Errorf("registered checkout unavailable: %w", err)
 			}
+			if s.Herdr {
+				if err := s.herdr(ctx, "open", path, "", ""); err != nil {
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
+					fmt.Fprintf(s.Err, "Warning: Herdr open failed; using existing Git checkout: %v\n", err)
+				}
+			}
 			return s.printPath(path)
 		}
 	}
@@ -203,11 +211,19 @@ func (s *Service) Open(ctx context.Context, label string) error {
 	if err != nil {
 		return err
 	}
-	args := []string{"--", path, selected.Name}
+	request := git.WorktreeRequest{Branch: selected.Name, Path: path}
 	if selected.Remote != "" {
-		args = []string{"--track", "-b", selected.Name, "--", path, selected.Ref}
+		request.CreateBranch, request.Track, request.Base = true, true, selected.Ref
 	}
-	return s.createAt(ctx, selected.Name, path, args, cfg)
+	revision, err := git.ResolveCommit(ctx, s.Repo.Source, selected.Ref)
+	if err != nil {
+		return err
+	}
+	upstream := ""
+	if selected.Remote != "" {
+		upstream = selected.Ref
+	}
+	return s.createAt(ctx, request, revision, upstream, cfg)
 }
 func (s *Service) managed(ctx context.Context, branch string) (string, error) {
 	path, err := s.path(ctx, branch)

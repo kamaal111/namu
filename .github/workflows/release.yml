@@ -75,6 +75,10 @@ jobs:
         run: |
           mise exec -- python3 scripts/release.py validate-tag "$RELEASE_TAG"
           test "$(cat version.txt)" = "${RELEASE_TAG#v}"
+      - name: Install shell integration test dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh
       - run: just check
       - name: Build, verify and upload release assets
         run: mise exec -- sh scripts/release.sh "$RELEASE_TAG" --publish
