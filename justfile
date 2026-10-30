@@ -1,3 +1,5 @@
+set shell := ["mise", "exec", "--", "sh", "-cu"]
+
 # List project workflows
 @_default:
     just --list --unsorted
@@ -20,4 +22,4 @@ format:
 
 # Build stable release archives without publishing
 package tag:
-    sh scripts/release.sh {{quote(tag)}}
+    sh scripts/release.sh {{ quote(tag) }}

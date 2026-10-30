@@ -64,14 +64,17 @@ jobs:
           persist-credentials: false
       - name: Resolve stable release commit
         run: |
-          python3 scripts/release.py validate-tag "$RELEASE_TAG"
           gh release view "$RELEASE_TAG" --json isDraft,isPrerelease --jq 'if .isDraft or .isPrerelease then error("Expected published stable release") else . end'
           git checkout --detach "refs/tags/$RELEASE_TAG"
-          test "$(cat version.txt)" = "${RELEASE_TAG#v}"
-      - uses: actions/setup-go@v7
+          test -f mise.toml || { echo 'Release tag must contain mise.toml' >&2; exit 1; }
+      - uses: jdx/mise-action@v5
         with:
-          go-version: '1.27.3'
-          check-latest: false
-      - run: sh scripts/check.sh
+          version: '2026.10.24'
+          cache: false
+      - name: Validate release version
+        run: |
+          mise exec -- python3 scripts/release.py validate-tag "$RELEASE_TAG"
+          test "$(cat version.txt)" = "${RELEASE_TAG#v}"
+      - run: just check
       - name: Build, verify and upload release assets
-        run: sh scripts/release.sh "$RELEASE_TAG" --publish
+        run: mise exec -- sh scripts/release.sh "$RELEASE_TAG" --publish

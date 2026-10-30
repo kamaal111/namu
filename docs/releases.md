@@ -35,19 +35,22 @@ checksums.txt
 ```
 
 Archives have normalized metadata and contain only the executable. The release
-build embeds the version in `namu --version`; compiler versions are pinned in CI.
+build embeds the version in `namu --version`; tools are pinned in `mise.toml`
+and shared with local development. See [development setup](development.md).
 
 ## Local packaging
 
-From the repository root with a matching `version.txt`:
+After completing [development setup](development.md), run from the repository
+root with a matching `version.txt`:
 
 ```sh
-just check
-just package v0.1.0
+mise exec -- just check
+mise exec -- just package "v$(cat version.txt)"
 ```
 
 Assets appear under `bin/release/`. No GitHub publication occurs unless the release
-script receives `--publish`; publication requires a clean checkout at the release tag.
+script receives `--publish` through `mise exec -- sh scripts/release.sh`;
+publication requires a clean checkout at the release tag.
 
 ## Recover failed uploads
 
@@ -55,7 +58,9 @@ script receives `--publish`; publication requires a clean checkout at the releas
 gh workflow run release.yml --repo kamaal111/namu -f release_tag=v0.1.0
 ```
 
-Recovery builds the existing tag, checks every existing expected asset byte-for-byte
+Recovery requires the existing tag to contain `mise.toml`; older tags fail
+explicitly rather than using runner tools. Recovery builds the existing tag
+and checks every existing expected asset byte-for-byte
 before uploading anything, and uploads only missing assets. It refuses to overwrite
 conflicting content. New source changes need a new release, not replacement tags.
 
@@ -64,7 +69,7 @@ conflicting content. New source changes need a new release, not replacement tags
 After all release assets are uploaded, generate a formula from verified downloads:
 
 ```sh
-python3 scripts/update_homebrew.py --version v0.1.0 --output /tmp/namu.rb
+mise exec -- python3 scripts/update_homebrew.py --version v0.1.0 --output /tmp/namu.rb
 ```
 
 Omit `--version` to select the latest published stable release. The updater checks
