@@ -22,7 +22,17 @@ func service(cmd *cobra.Command, dir string) (*worktree.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &worktree.Service{Repo: repo, Out: cmd.OutOrStdout(), Err: cmd.ErrOrStderr()}, nil
+	s := &worktree.Service{Repo: repo, Out: cmd.OutOrStdout(), Err: cmd.ErrOrStderr()}
+	if cmd.Flags().Lookup("herdr") != nil {
+		enabled, _ := cmd.Flags().GetBool("herdr")
+		if !cmd.Flags().Changed("herdr") {
+			enabled = os.Getenv("HERDR_ENV") == "1"
+		}
+		focus, _ := cmd.Flags().GetBool("focus")
+		noFocus, _ := cmd.Flags().GetBool("no-focus")
+		s.Herdr, s.NoFocus = enabled, !focus || noFocus
+	}
+	return s, nil
 }
 func New(dir string) *cobra.Command {
 	root := &cobra.Command{Use: "namu", Short: "Create, open, list and delete Git worktrees", Version: version(), Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true}
@@ -121,7 +131,13 @@ func New(dir string) *cobra.Command {
 		}
 		return s.Setup(cmd.Context(), args[0])
 	}}
-	root.AddCommand(create, open, list, remove, setup)
+	for _, cmd := range []*cobra.Command{create, open} {
+		cmd.Flags().Bool("herdr", false, "Use Herdr (automatic inside Herdr; --herdr=false disables)")
+		cmd.Flags().Bool("focus", true, "Focus the workspace and change directory with shell integration")
+		cmd.Flags().Bool("no-focus", false, "Keep current workspace and shell directory")
+		cmd.MarkFlagsMutuallyExclusive("focus", "no-focus")
+	}
+	root.AddCommand(create, open, list, remove, setup, shellInit())
 	return root
 }
 func interactive(cmd *cobra.Command) bool {

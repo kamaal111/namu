@@ -70,14 +70,60 @@ Bare repositories are unsupported. Create an initial commit before creating/open
 branches. Git locks and conflicts are surfaced without force, branch deletion,
 checkout replacement, or automatic rollback.
 
+## Herdr integration
+
+Inside a Herdr pane (`HERDR_ENV=1`), `create` and `open` automatically use Herdr
+and focus the checkout's workspace. The `herdr` executable must be on `PATH` and
+able to reach its server. Namu inherits Herdr's session and socket environment.
+Force or disable this integration explicitly:
+
+```sh
+namu create feature/cards --herdr
+namu open feature/cards --herdr=false
+namu open feature/cards --no-focus
+```
+
+Herdr creates checkouts at Namu's usual `.agents/worktrees/BRANCH` path and opens
+existing checkouts as workspaces. `--focus` is the default; `--no-focus` preserves
+Herdr's current workspace. These flags are mutually exclusive and also control
+shell navigation when the integration below is installed. `--focus=false` and
+`--no-focus=false` are supported.
+
+If Herdr is unavailable or fails, Namu warns on stderr and falls back to Git.
+If Herdr already created the requested checkout or branch, Namu verifies its path,
+branch, and commit before reusing it. Conflicting partial state is preserved and
+reported for inspection. Cancellation stops the operation. Setup failures preserve
+the checkout and fail normally; they never trigger a second creation attempt.
+Opening an existing checkout never reruns setup, even when Herdr fails.
+
+Herdr documents detection and worktree commands in its
+[CLI reference](https://herdr.chefgroep.nl/docs/cli-reference/).
+
 ## Paths and shell use
 
 `create` and `open` write exactly one absolute path and a newline to stdout as soon
 as Git creates or identifies the checkout, before file copying or setup. All picker,
 setup, progress, and error output goes to stderr.
 
-A CLI cannot change its parent shell's directory. Use the exit status when composing
-commands, because setup can fail **after** a path has been printed:
+To enter the checkout automatically after successful `create` or `open`, load the
+shell integration in your current shell or add it to your shell startup file:
+
+```sh
+# Zsh (~/.zshrc)
+eval "$(namu shell-init zsh)"
+# Bash (~/.bashrc)
+eval "$(namu shell-init bash)"
+```
+
+The wrapper prints the checkout path and changes directory after setup succeeds,
+for both Git and Herdr. Use `--no-focus` to keep your shell directory. Failures and
+picker cancellation never change directory. The wrapper buffers stdout until the
+command finishes, while diagnostics remain on stderr. Other commands pass through.
+Use `command namu` to bypass the wrapper in scripts or command substitutions.
+
+Without shell integration, the executable cannot change its parent shell's
+directory. Use the exit status when composing commands, because setup can fail
+**after** a path has been printed:
 
 ```sh
 if checkout=$(namu open feature/cards); then

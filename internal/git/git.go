@@ -134,7 +134,7 @@ func ValidateBranch(ctx context.Context, dir, name string) error {
 	return err
 }
 func AllBranches(ctx context.Context, dir string) ([]Branch, error) {
-	if _, err := Run(ctx, dir, "rev-parse", "--verify", "HEAD^{commit}"); err != nil {
+	if _, err := ResolveCommit(ctx, dir, "HEAD"); err != nil {
 		return nil, fmt.Errorf("repository has no commits; create a commit first: %w", err)
 	}
 	text, err := Text(ctx, dir, "for-each-ref", "--format=%(refname)%09%(symref)", "refs/heads", "refs/remotes")

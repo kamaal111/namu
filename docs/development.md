@@ -12,7 +12,8 @@ mise exec -- just
 ```
 
 The repository's `mise.toml` pins Go 1.27.3, Python 3.15.2, and just 1.59.0.
-Git remains a system prerequisite. Tool installation and vulnerability checks
+Git, Bash, and Zsh remain system prerequisites. Bash and Zsh are used by the
+shell integration tests. Tool installation and vulnerability checks
 require network access.
 
 Every just recipe runs through `mise exec`, so it loads the project tools even

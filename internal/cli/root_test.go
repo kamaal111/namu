@@ -48,6 +48,7 @@ func TestNoninteractiveOpenRequiresBranch(t *testing.T) {
 	check(t, out == "", "must not emit path")
 }
 func TestCreatePrintsPathBeforeHookAndDoesNotLeakHookOutput(t *testing.T) {
+	t.Setenv("HERDR_ENV", "")
 	repo := testutil.Repository(t)
 	dir, physical := repo.Source, repo.Main
 	must(t, os.WriteFile(filepath.Join(dir, ".namu.toml"), []byte("[setup]\ncommand = ['sh', '-c', 'echo diagnostics; exit 1']\n"), 0600))
