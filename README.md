@@ -19,17 +19,11 @@ Or install with Go 1.27.3 or later after this repository is published:
 go install github.com/kamaal111/namu/cmd/namu@latest
 ```
 
-For a local build today:
+Release archives contain a single executable. Verify the archive against
+`checksums.txt`, extract it, and install the executable in a directory on your
+`PATH`.
 
-```sh
-just build
-mkdir -p "$HOME/.local/bin"
-install -m 755 bin/namu "$HOME/.local/bin/namu"
-```
-
-Add `~/.local/bin` to your `PATH`. Release archives contain a single executable;
-verify the archive against `checksums.txt`, extract it, and install it the same way.
-See [release instructions](docs/releases.md) for publishing and Homebrew setup.
+For contributor setup and source builds, see the [development docs](docs/development.md).
 
 ## Worktrees
 
@@ -141,21 +135,3 @@ An explicit retry reruns copying and the hook. Hooks should therefore tolerate
 repeated execution. Opening an existing checkout does not copy or run setup again.
 Project-specific ports, environment rewriting, dependency installation, and services
 belong in the project hook; Namu does not implement them itself.
-
-## Development
-
-Use Go 1.27.3, Git, Python 3.10+, and optionally `just`:
-
-```sh
-just test
-just check
-just build
-just package v0.1.0
-```
-
-`just check` checks formatting, verifies modules, runs vet, Go tests, race tests,
-`govulncheck`, release-tool tests, and CGO-disabled builds for all four targets.
-Vulnerability checks require network access. Integration tests create isolated local
-Git repositories and bare remotes; they do not use accounts or network remotes.
-The optional picker uses the same Cobra/Charm stack as `agent-vm`; only its Gitignore
-matcher is imported from go-git, while Git itself performs repository operations.
