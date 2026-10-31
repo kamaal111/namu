@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/kamaal111/namu/compare/v0.4.0...v0.4.1) (2026-10-31)
+
+
+### Performance Improvements
+
+* **list:** batch pull request number lookups ([98fb620](https://github.com/kamaal111/namu/commit/98fb62022a7eade8ee863447f88daec91f1e1d64))
+
 ## [0.4.0](https://github.com/kamaal111/namu/compare/v0.3.0...v0.4.0) (2026-10-31)
 
 
