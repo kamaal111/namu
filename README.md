@@ -113,6 +113,39 @@ Opening an existing checkout never reruns setup, even when Herdr fails.
 Herdr documents detection and worktree commands in its
 [CLI reference](https://herdr.chefgroep.nl/docs/cli-reference/).
 
+## Rex integration
+
+Inside a Rex terminal (`REX_SESSION` is nonempty), `create` and `open`
+automatically create or reuse a Rex session named after the branch. New
+sessions start an interactive shell in the checkout directory after setup
+succeeds. The `rex` executable must be on `PATH`.
+
+```sh
+namu create feature/cards --rex
+namu open feature/cards --no-focus
+namu open feature/cards --rex=false
+```
+
+Focus is enabled by default. Namu honors `REX_CLIENT`; otherwise it selects
+the connected app owning the current Rex pane, falling back to Rex's default
+single-app selection. App focus requires Rex Remote Control to be enabled.
+`--no-focus` and `--focus=false` create or reuse the session in the background.
+A reused terminal retains its current directory and running processes.
+
+Session IDs are stored under the common Git directory's `namu/rex/` directory,
+keyed by worktree path and Rex host ID. Repeated opens reuse mapped live
+sessions even after renaming; closed sessions are recreated. Unmapped sessions
+are not adopted by label. Different repositories and hosts remain separate.
+
+Rex failures warn and use existing shell fallback without removing the
+checkout. A focus failure retains the mapping for the next open. Session
+creation is never automatically retried after an uncertain failure; inspect
+Rex before retrying. State errors and lock contention also select fallback.
+After an interrupted process leaves a stale `.lock` file, remove that file
+only once the associated operation has stopped. Branch names longer than
+Rex's 128-character label limit select fallback. If both Herdr and Rex are
+detected, disable one explicitly with `--herdr=false` or `--rex=false`.
+
 ## Paths and shell use
 
 `create` and `open` write exactly one checkout path and a newline to stdout as soon

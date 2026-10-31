@@ -80,3 +80,28 @@ focus enabled write a destination there. The wrapper preserves stdout and the
 exit status, removes the file, and changes directory only after success. This
 keeps navigation decisions in Go without changing path-only stdout. Reload an
 existing shell wrapper with `exec bash` or `exec zsh` after upgrading.
+
+## Rex adapter
+
+`internal/rex` implements an open-only adapter. Git creates the worktree and
+setup finishes before Rex creates its session. Detection uses `REX_SESSION`;
+`--rex` and `--rex=false` override it on `create` and `open`.
+
+The adapter reads `rex whoami --json` for host and current pane identity,
+checks `rex ls --json` for mapped sessions, and creates missing sessions with
+`rex new BRANCH --cwd PATH --json`. Focus uses `session.select`, honoring
+`REX_CLIENT` first, otherwise selecting the pane's connected app owner using
+`block inspect` and `client ls`. Without an owner it uses Rex's default client
+selection. Background opening never discovers or selects an app.
+
+Private, versioned JSON mappings live in the common Git directory under
+`namu/rex/`, keyed by canonical worktree path and host ID. Per-entry exclusive
+lock files serialize creation, and atomic replacement saves identity before
+focus. Renamed sessions remain reusable; missing IDs are recreated only after
+a successful session listing. State errors fail the adapter without guessing.
+No deletion hook removes sessions, and reuse never changes an existing pane's
+working directory or process.
+
+All Rex calls share a 60-second operation deadline and captured output. Errors
+flow through the existing warning and shell fallback; cancellation propagates.
+Tests replace only the Rex executable and exercise real Git and state files.
