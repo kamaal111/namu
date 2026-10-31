@@ -33,8 +33,9 @@ mise exec -- just format
 mise exec -- just package "v$(cat version.txt)"
 ```
 
-`just test` runs the Go tests. `just check` checks formatting, verifies modules,
-runs vet, Go tests, race tests, `govulncheck`, Python release-tool tests, and
+`just test` runs the Go tests. `just check` runs the same verification suite
+as CI on the current operating system: formatting, module verification,
+vet, Go tests, race tests, `govulncheck`, Python release-tool tests, and
 CGO-disabled builds for macOS and Linux on ARM64 and AMD64. Integration tests
 create isolated local Git repositories and bare remotes; they do not use
 accounts or network remotes.

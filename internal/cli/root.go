@@ -56,6 +56,9 @@ func New(dir string) *cobra.Command {
 	create.Flags().StringVar(&base, "base", "", "Exact local base ref; skips fetching")
 	create.Flags().StringVar(&remote, "remote", "", "Remote to fetch for its default branch")
 	create.MarkFlagsMutuallyExclusive("base", "remote")
+	create.ValidArgsFunction = cobra.NoFileCompletions
+	_ = create.RegisterFlagCompletionFunc("base", completeRepository(dir, "base"))
+	_ = create.RegisterFlagCompletionFunc("remote", completeRepository(dir, "remote"))
 	open := &cobra.Command{Use: "open [BRANCH]", Short: "Create or reuse a branch checkout and print its path", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 && !interactive(cmd) {
 			return fmt.Errorf("interactive terminal required; supply a branch: namu open feature/cards")
@@ -179,6 +182,10 @@ func New(dir string) *cobra.Command {
 		cmd.Flags().Bool("no-focus", false, "Keep current workspace and shell directory")
 		cmd.MarkFlagsMutuallyExclusive("focus", "no-focus")
 	}
+	open.ValidArgsFunction = completeRepository(dir, "open")
+	remove.ValidArgsFunction = completeRepository(dir, "delete")
+	setup.ValidArgsFunction = completeRepository(dir, "setup")
+	list.ValidArgsFunction = cobra.NoFileCompletions
 	root.AddCommand(create, open, list, remove, setup, shellInit())
 	return root
 }

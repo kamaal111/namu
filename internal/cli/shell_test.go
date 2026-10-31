@@ -17,11 +17,40 @@ func TestShellInitOutsideRepository(t *testing.T) {
 		t.Run(shell, func(t *testing.T) {
 			out, _, err := execute(t, t.TempDir(), "shell-init", shell)
 			must(t, err)
-			check(t, out == shellIntegration, "must print shell function")
+			check(t, strings.HasPrefix(out, shellIntegration), "must print shell function")
+			check(t, strings.Contains(out, "__namu"), "must include completion")
 		})
 	}
 	_, _, err := execute(t, t.TempDir(), "shell-init", "fish")
 	check(t, err != nil, "unsupported shell must fail")
+}
+
+func TestShellInitRegistersCompletion(t *testing.T) {
+	for _, tc := range []struct {
+		name, shell, before, assertion string
+	}{
+		{"bash", "bash", "", "complete -p namu"},
+		{"zsh", "zsh", "", "print -r -- ${_comps[namu]}"},
+		{"zsh-insecure-directory", "zsh", "fpath=(\"$TEST_COMPLETION_DIR\" $fpath)\n", "print -r -- ${_comps[namu]}"},
+		{"zsh-initialized", "zsh", "autoload -Uz compinit; compinit -i\ncompinit() { return 99; }\n", "print -r -- ${_comps[namu]}"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := shellHome(t)
+			t.Setenv("ZDOTDIR", home)
+			insecure := filepath.Join(home, "insecure-completions")
+			must(t, os.Mkdir(insecure, 0700))
+			must(t, os.Chmod(insecure, 0777))
+			t.Setenv("TEST_COMPLETION_DIR", insecure)
+			out, _, err := execute(t, home, "shell-init", tc.shell)
+			must(t, err)
+			program := "set -e\n" + tc.before + out + "\n" + out + "\n" + tc.assertion
+			cmd := exec.Command(tc.shell, "-f", "-c", program)
+			cmd.Dir = home
+			result, err := cmd.CombinedOutput()
+			must(t, err)
+			check(t, strings.Contains(string(result), "namu"), string(result))
+		})
+	}
 }
 
 func TestShellNavigationAndForwarding(t *testing.T) {
