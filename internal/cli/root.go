@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 
 	git "github.com/kamaal111/namu/internal/git"
+	"github.com/kamaal111/namu/internal/github"
 	"github.com/kamaal111/namu/internal/ui"
 	"github.com/kamaal111/namu/internal/worktree"
 	"github.com/spf13/cobra"
@@ -99,8 +100,20 @@ func New(dir string) *cobra.Command {
 		if err != nil {
 			return err
 		}
+		branches := make([]string, 0, len(trees))
+		for _, tree := range trees {
+			branches = append(branches, tree.Branch)
+		}
+		prs, err := github.PRNumbers(cmd.Context(), s.Repo.Source, branches)
+		if err != nil {
+			return err
+		}
 		w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-		fmt.Fprintln(w, "BRANCH\tPATH\tHEAD\tNOTES")
+		if len(prs) > 0 {
+			fmt.Fprintln(w, "BRANCH\tPATH\tPR\tHEAD\tNOTES")
+		} else {
+			fmt.Fprintln(w, "BRANCH\tPATH\tHEAD\tNOTES")
+		}
 		for _, tree := range trees {
 			branch := tree.Branch
 			var notes []string
@@ -118,7 +131,15 @@ func New(dir string) *cobra.Command {
 			if note == "" {
 				note = "—"
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", branch, pathdisplay.Shorten(tree.Path), tree.Head, note)
+			fmt.Fprintf(w, "%s\t%s\t", branch, pathdisplay.Shorten(tree.Path))
+			if len(prs) > 0 {
+				pr := ""
+				if number := prs[tree.Branch]; number > 0 {
+					pr = fmt.Sprintf("#%d", number)
+				}
+				fmt.Fprintf(w, "%s\t", pr)
+			}
+			fmt.Fprintf(w, "%s\t%s\n", tree.Head, note)
 		}
 		return w.Flush()
 	}}

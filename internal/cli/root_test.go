@@ -49,6 +49,7 @@ func TestNoninteractiveOpenRequiresBranch(t *testing.T) {
 	check(t, out == "", "must not emit path")
 }
 func TestCreatePrintsPathBeforeHookAndDoesNotLeakHookOutput(t *testing.T) {
+	testutil.GitHub(t, "exit 1")
 	t.Setenv("HERDR_ENV", "")
 	repo := testutil.Repository(t)
 	dir, physical := repo.Source, repo.Main
@@ -63,6 +64,7 @@ func TestCreatePrintsPathBeforeHookAndDoesNotLeakHookOutput(t *testing.T) {
 }
 
 func TestListNotes(t *testing.T) {
+	testutil.GitHub(t, "exit 1")
 	for _, tt := range []struct {
 		name     string
 		addArgs  []string
@@ -179,6 +181,7 @@ func TestDeleteProtectsInvokingCheckoutAndContinues(t *testing.T) {
 }
 
 func TestHomePathsAcrossCheckoutCommands(t *testing.T) {
+	testutil.GitHub(t, "exit 1")
 	t.Setenv("HERDR_ENV", "")
 	repo := testutil.Repository(t)
 	t.Setenv("HOME", repo.Main)
