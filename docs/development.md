@@ -24,6 +24,9 @@ in a shell without mise activation. If just itself is not on your `PATH`, use
 
 ```sh
 mise exec -- just test
+mise exec -- just test-run TestShorten ./internal/pathdisplay
+mise exec -- just vet
+mise exec -- just check-shells
 mise exec -- just check
 mise exec -- just build
 mise exec -- just format
@@ -36,11 +39,11 @@ CGO-disabled builds for macOS and Linux on ARM64 and AMD64. Integration tests
 create isolated local Git repositories and bare remotes; they do not use
 accounts or network remotes.
 
-Direct script execution must also load the environment:
-
-```sh
-mise exec -- sh scripts/check.sh
-```
+Use existing `just` recipes for repeatable development and verification commands.
+Add or extend a recipe before running a missing workflow, so other agents can
+reuse it. The root `AGENTS.md` records this policy. `just test PACKAGE` selects
+a package; `just test-run PATTERN PACKAGE` selects matching tests. Both default
+to all packages when the package argument is omitted.
 
 To install a local source build:
 

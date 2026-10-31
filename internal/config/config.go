@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"github.com/kamaal111/namu/internal/pathdisplay"
 	"github.com/pelletier/go-toml/v2"
 	"os"
 	"path/filepath"
@@ -30,7 +31,7 @@ func Load(source string) (Config, error) {
 		return c, err
 	}
 	if !info.Mode().IsRegular() {
-		return c, fmt.Errorf("%s must be a regular file", filepath.Join(source, ".namu.toml"))
+		return c, fmt.Errorf("%s must be a regular file", pathdisplay.Shorten(filepath.Join(source, ".namu.toml")))
 	}
 	f, err := root.Open(".namu.toml")
 	if err != nil {

@@ -33,8 +33,8 @@ func TestShellInstallReportsExactChangesAndPreservesConfiguration(t *testing.T) 
 	content, err := os.ReadFile(path)
 	must(t, err)
 	check(t, string(content) == "export EDITOR=vim"+edits[0].Addition, string(content))
-	check(t, strings.Contains(preview.String(), path+"\n"+edits[0].Addition), preview.String())
-	check(t, strings.Contains(report.String(), path+"\n"+edits[0].Addition), report.String())
+	check(t, strings.Contains(preview.String(), "~/.zshrc\n"+edits[0].Addition), preview.String())
+	check(t, strings.Contains(report.String(), "~/.zshrc\n"+edits[0].Addition), report.String())
 	info, err := os.Stat(path)
 	must(t, err)
 	check(t, info.Mode().Perm() == 0640, "preserve permissions")
@@ -43,7 +43,7 @@ func TestShellInstallReportsExactChangesAndPreservesConfiguration(t *testing.T) 
 	check(t, again[0].Addition == "", "must not duplicate integration")
 	report.Reset()
 	must(t, applyShellInstall(again, &report))
-	check(t, strings.Contains(report.String(), "Already configured: "+path), report.String())
+	check(t, strings.Contains(report.String(), "Already configured: ~/.zshrc"), report.String())
 }
 
 func TestShellInstallDestinations(t *testing.T) {
@@ -121,8 +121,8 @@ func TestShellInstallReportsPartialFailure(t *testing.T) {
 	content, err := os.ReadFile(filepath.Join(home, ".bashrc"))
 	must(t, err)
 	check(t, string(content) == edits[0].Addition, string(content))
-	check(t, strings.Contains(report.String(), "Added to: "+edits[0].Path), report.String())
-	check(t, !strings.Contains(report.String(), "Added to: "+edits[1].Path), report.String())
+	check(t, strings.Contains(report.String(), "Added to: ~/.bashrc"), report.String())
+	check(t, !strings.Contains(report.String(), "Added to: ~/.bash_profile"), report.String())
 }
 
 func TestShellInstallRejectsChangedConfigurationAfterPreview(t *testing.T) {
@@ -167,7 +167,7 @@ func TestOfferShellInstallAcceptAndDecline(t *testing.T) {
 			var report bytes.Buffer
 			err := offerShellInstall(context.Background(), "zsh", &report, func() (bool, error) { return accepted, nil })
 			must(t, err)
-			check(t, strings.Contains(report.String(), filepath.Join(home, ".zshrc")), report.String())
+			check(t, strings.Contains(report.String(), "~/.zshrc"), report.String())
 			_, err = os.Stat(filepath.Join(home, ".zshrc"))
 			check(t, (err == nil) == accepted, "only acceptance may write configuration")
 			check(t, strings.Contains(report.String(), "Reload") == accepted, report.String())
@@ -182,5 +182,5 @@ func TestExplicitShellInstallerOutsideRepository(t *testing.T) {
 	check(t, out == "", out)
 	content, err := os.ReadFile(filepath.Join(home, ".zshrc"))
 	must(t, err)
-	check(t, strings.Contains(diagnostics, "Added to: "+filepath.Join(home, ".zshrc")+"\n"+string(content)), diagnostics)
+	check(t, strings.Contains(diagnostics, "Added to: ~/.zshrc\n"+string(content)), diagnostics)
 }

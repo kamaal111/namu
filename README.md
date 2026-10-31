@@ -60,7 +60,7 @@ namu delete feature/pricing feature/release
   to move, Enter to select, Escape to leave, or Ctrl+C to cancel. Symbolic remote HEAD
   refs and `gitbutler/workspace` are excluded. Input and stderr must be terminals;
   stdout can be redirected.
-- `list` shows every registered worktree, its branch, absolute path, commit, and
+- `list` shows every registered worktree, its branch, home-abbreviated path, commit, and
   detached/locked/prunable state. It does not fetch or prune anything.
 - `delete BRANCH [BRANCH...]` removes matching registered linked checkouts at any
   location, including checkouts created outside Namu, and **retains their branches**. Each unique branch is attempted in argument order;
@@ -106,13 +106,17 @@ Herdr documents detection and worktree commands in its
 
 ## Paths and shell use
 
-`create` and `open` write exactly one absolute path and a newline to stdout as soon
-as Git creates or identifies the checkout, before file copying or setup. All picker,
-setup, progress, and error output goes to stderr.
+`create` and `open` write exactly one checkout path and a newline to stdout as soon
+as Git creates or identifies the checkout, before file copying or setup. Paths
+beneath your home directory use `~` (for example, `~/Projects/namu`); paths outside
+home remain absolute. This applies to listing, status messages, and Namu's own
+path fields in errors. Underlying tool output and error details are unchanged.
+Scripts consuming checkout output must expand a leading `~` before using it.
+All picker, setup, progress, and error output goes to stderr.
 
 On your first interactive `create` or `open` with focus enabled, Namu offers to
 install shell integration so future commands enter the checkout automatically.
-It shows each startup file's absolute path and the exact text it will append,
+It shows each startup file's home-abbreviated path and the exact text it will append,
 then asks for confirmation (default: No). After installation it reports each
 changed file and the exact text added. Existing configuration is preserved;
 repeated installation does not add duplicate initialization.
@@ -125,6 +129,7 @@ Declining leaves startup files untouched and continues the worktree command.
 Scripts, redirected commands, unsupported shells, and `--no-focus` never trigger
 automatic installation.
 
+After updating Namu, reload existing shell sessions to load the updated integration.
 Reload once with `exec zsh` or `exec bash`, as instructed after installation.
 The installing invocation cannot change its parent shell's directory. You can
 also install explicitly; these commands authorize the displayed file edits:
@@ -156,6 +161,10 @@ directory. Use the exit status when composing commands, because setup can fail
 
 ```sh
 if checkout=$(namu open feature/cards); then
+  case "$checkout" in
+    '~') checkout=$HOME ;;
+    '~/'*) checkout="$HOME/${checkout#\~/}" ;;
+  esac
   cd -- "$checkout"
 fi
 ```

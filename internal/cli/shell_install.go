@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kamaal111/namu/internal/pathdisplay"
 	"github.com/spf13/cobra"
 	"golang.org/x/sys/unix"
 )
@@ -85,7 +86,7 @@ func prepareShellInstall(shell string) ([]shellEdit, error) {
 				return nil, err
 			}
 			if !info.Mode().IsRegular() {
-				return nil, fmt.Errorf("startup file is not a regular file: %s", path)
+				return nil, fmt.Errorf("startup file is not a regular file: %s", pathdisplay.Shorten(path))
 			}
 			before, err = os.ReadFile(path)
 			if err != nil {
@@ -111,10 +112,10 @@ func prepareShellInstall(shell string) ([]shellEdit, error) {
 func previewShellInstall(edits []shellEdit, out io.Writer) error {
 	for _, edit := range edits {
 		if edit.Addition == "" {
-			if _, err := fmt.Fprintf(out, "Already configured: %s\n", edit.Path); err != nil {
+			if _, err := fmt.Fprintf(out, "Already configured: %s\n", pathdisplay.Shorten(edit.Path)); err != nil {
 				return err
 			}
-		} else if _, err := fmt.Fprintf(out, "Will add to: %s\n%s", edit.Path, edit.Addition); err != nil {
+		} else if _, err := fmt.Fprintf(out, "Will add to: %s\n%s", pathdisplay.Shorten(edit.Path), edit.Addition); err != nil {
 			return err
 		}
 	}
@@ -124,13 +125,13 @@ func previewShellInstall(edits []shellEdit, out io.Writer) error {
 func applyShellInstall(edits []shellEdit, out io.Writer) error {
 	for _, edit := range edits {
 		if edit.Addition == "" {
-			if _, err := fmt.Fprintf(out, "Already configured: %s\n", edit.Path); err != nil {
+			if _, err := fmt.Fprintf(out, "Already configured: %s\n", pathdisplay.Shorten(edit.Path)); err != nil {
 				return err
 			}
 			continue
 		}
 		if err := appendShellEdit(edit, out); err != nil {
-			return fmt.Errorf("cannot install shell integration in %s: %w", edit.Path, err)
+			return fmt.Errorf("cannot install shell integration in %s: %w", pathdisplay.Shorten(edit.Path), err)
 		}
 	}
 	return nil
@@ -163,7 +164,7 @@ func appendShellEdit(edit shellEdit, out io.Writer) (result error) {
 		if n != len(edit.Addition) {
 			label = "Partially added to"
 		}
-		_, reportErr = fmt.Fprintf(out, "%s: %s\n%s", label, edit.Path, edit.Addition[:n])
+		_, reportErr = fmt.Fprintf(out, "%s: %s\n%s", label, pathdisplay.Shorten(edit.Path), edit.Addition[:n])
 	}
 	return errors.Join(writeErr, reportErr)
 }
