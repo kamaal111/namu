@@ -65,6 +65,12 @@ namu delete feature/pricing feature/release
   `Locked against removal`, or `Stale worktree registration`. Multiple notes are
   separated by semicolons; `—` means none of these conditions apply, not that the
   checkout has no uncommitted changes. It does not fetch or prune anything.
+  With an authenticated GitHub CLI (`gh`), it also shows a `PR` column between
+  `PATH` and `HEAD` when at least one branch's PR number can be determined.
+  Open PRs (including drafts) take precedence; otherwise the most recently
+  updated merged or closed PR is shown. Unresolved and detached rows are blank.
+  Missing `gh`, failed authentication, or lookup failures silently omit PR data;
+  the column is hidden when no numbers resolve. PR lookup is limited to ten seconds.
 - `delete BRANCH [BRANCH...]` removes matching registered linked checkouts at any
   location, including checkouts created outside Namu, and **retains their branches**. Each unique branch is attempted in argument order;
   failures are reported together and make the command exit 1, while remaining
