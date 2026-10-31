@@ -187,16 +187,17 @@ func TestInstalledShellIntegrationNavigates(t *testing.T) {
 func TestAutomaticShellInstallInTerminal(t *testing.T) {
 	binaryDir := buildShellCLI(t)
 	for _, tc := range []struct {
-		name, shell, answer, marker, herdr string
-		args                               []string
-		redirected, prompt, installed      bool
-		code                               int
+		name, shell, answer, marker, herdr, rex string
+		args                                    []string
+		redirected, prompt, installed           bool
+		code                                    int
 	}{
 		{name: "accept", shell: "zsh", answer: "yes\n", args: []string{"open", "feature/cards"}, prompt: true, installed: true},
 		{name: "accept-bash", shell: "bash", answer: "yes\n", args: []string{"create", "feature/new", "--base", "main"}, prompt: true, installed: true},
 		{name: "decline", shell: "zsh", answer: "no\n", args: []string{"open", "feature/cards"}, prompt: true},
 		{name: "eof", shell: "zsh", answer: "\x04", args: []string{"open", "feature/cards"}, prompt: true},
 		{name: "interrupt", shell: "zsh", answer: "interrupt", args: []string{"open", "feature/cards"}, prompt: true, code: 130},
+		{name: "rex", shell: "zsh", rex: "session:source", args: []string{"open", "feature/cards"}},
 		{name: "herdr", shell: "zsh", herdr: "1", args: []string{"open", "feature/cards"}},
 		{name: "loaded", shell: "zsh", marker: "1", args: []string{"open", "feature/cards"}},
 		{name: "no-focus", shell: "zsh", args: []string{"open", "feature/cards", "--no-focus"}},
@@ -212,6 +213,8 @@ func TestAutomaticShellInstallInTerminal(t *testing.T) {
 			t.Setenv("SHELL", "/bin/"+tc.shell)
 			t.Setenv("TERM", "xterm-256color")
 			t.Setenv("NAMU_SHELL_INTEGRATION", tc.marker)
+			testutil.Rex(t, testutil.RexResponses)
+			t.Setenv("REX_SESSION", tc.rex)
 			t.Setenv("HERDR_ENV", tc.herdr)
 			testutil.Herdr(t, `"$REAL_GIT" -C "$source" worktree add "$target" "$branch"`)
 			settings, err := json.Marshal(struct {

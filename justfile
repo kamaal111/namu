@@ -8,6 +8,10 @@ set shell := ["mise", "exec", "--", "sh", "-cu"]
 build:
     CGO_ENABLED=0 go build -buildvcs=false -trimpath -o bin/namu ./cmd/namu
 
+# Run Namu from source
+run +args:
+    go run ./cmd/namu {{args}}
+
 # Run Go tests
 test package="./...":
     go test {{ quote(package) }}

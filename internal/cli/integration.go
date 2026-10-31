@@ -7,6 +7,7 @@ import (
 
 	"github.com/kamaal111/namu/internal/herdr"
 	"github.com/kamaal111/namu/internal/integration"
+	"github.com/kamaal111/namu/internal/rex"
 	"github.com/spf13/cobra"
 )
 
@@ -18,6 +19,7 @@ type integrationDefinition struct {
 
 // Register additional technologies here; lifecycle orchestration stays shared.
 var integrations = []integrationDefinition{
+	{flag: "rex", help: "Use Rex (automatic inside Rex; --rex=false disables)", detected: rex.Detected, hooks: rex.Hooks},
 	{flag: "herdr", help: "Use Herdr (automatic inside Herdr; --herdr=false disables)", detected: herdr.Detected, hooks: herdr.Hooks},
 }
 
