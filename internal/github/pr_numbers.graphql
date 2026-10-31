@@ -1,0 +1,33 @@
+# Go template: repeat variable declarations and PR fields for each branch in a batch.
+query PullRequestNumbers(
+  $owner: String!
+  $name: String!
+  {{range $index, $branch := . -}}
+  $branch{{$index}}: String!
+  {{end -}}
+) {
+  repository(owner: $owner, name: $name) {
+    {{range $index, $branch := . -}}
+    open{{$index}}: pullRequests(
+      headRefName: $branch{{$index}}
+      states: [OPEN]
+      first: 1
+      orderBy: {field: UPDATED_AT, direction: DESC}
+    ) {
+      nodes {
+        number
+      }
+    }
+    closed{{$index}}: pullRequests(
+      headRefName: $branch{{$index}}
+      states: [CLOSED, MERGED]
+      first: 1
+      orderBy: {field: UPDATED_AT, direction: DESC}
+    ) {
+      nodes {
+        number
+      }
+    }
+    {{end -}}
+  }
+}

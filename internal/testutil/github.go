@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	_ "embed"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,10 +14,13 @@ func GitHub(t *testing.T, body string) string {
 	log := filepath.Join(bin, "calls")
 	t.Setenv("GH_CALLS", log)
 	path := filepath.Join(bin, "gh")
-	Write(t, path, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$GH_CALLS\"\n"+body)
+	Write(t, path, githubScript+body)
 	if err := os.Chmod(path, 0700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return log
 }
+
+//go:embed scripts/github.sh
+var githubScript string
