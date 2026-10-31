@@ -73,3 +73,8 @@ See [releases and Homebrew](releases.md) for packaging, publishing, and recovery
 The optional picker uses the same Cobra/Charm stack as `agent-vm`; only its
 Gitignore matcher is imported from go-git, while Git itself performs repository
 operations.
+
+## Adding an integration
+
+See [Integration hooks](integrations.md) for the typed hook contract, adapter
+examples, lifecycle ordering, recovery behavior, and registration instructions.

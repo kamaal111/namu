@@ -3,36 +3,22 @@ namu() {
     create|open) ;;
     *) NAMU_SHELL_INTEGRATION=1 command namu "$@"; return $? ;;
   esac
-  local namu_arg namu_path namu_result namu_focus=1 namu_skip=0
-  for namu_arg in "$@"; do
-    if [ "$namu_skip" = 1 ]; then
-      namu_skip=0
-      continue
-    fi
-    case "$namu_arg" in
-      --) break ;;
-      --base|--remote) namu_skip=1 ;;
-      --help|--help=true|-h|-h=true) NAMU_SHELL_INTEGRATION=1 command namu "$@"; return $? ;;
-      --no-focus|--no-focus=true|--focus=false) namu_focus=0 ;;
-      --focus|--focus=true|--no-focus=false) namu_focus=1 ;;
-    esac
-  done
-  if [ "$namu_focus" = 0 ]; then
-    NAMU_SHELL_INTEGRATION=1 command namu "$@"
+  local namu_path namu_result namu_file namu_destination
+  if ! namu_file=$(mktemp "${TMPDIR:-/tmp}/namu-navigation.XXXXXXXXXX"); then
+    printf '%s\n' 'Warning: cannot prepare shell navigation' >&2
+    NAMU_SHELL_INTEGRATION=1 NAMU_SHELL_RESULT= command namu "$@"
     return $?
   fi
-  if namu_path=$(NAMU_SHELL_INTEGRATION=1 command namu "$@"); then
+  if namu_path=$(NAMU_SHELL_INTEGRATION=1 NAMU_SHELL_RESULT="$namu_file" command namu "$@"); then
     namu_result=0
   else
     namu_result=$?
   fi
+  namu_destination=$(cat -- "$namu_file")
+  rm -f -- "$namu_file"
   if [ -n "$namu_path" ]; then printf '%s\n' "$namu_path"; fi
-  if [ "$namu_result" = 0 ] && [ -n "$namu_path" ]; then
-    case "$namu_path" in
-      '~') namu_path=$HOME ;;
-      '~/'*) namu_path="$HOME/${namu_path#\~/}" ;;
-    esac
-    cd -- "$namu_path" || return $?
+  if [ "$namu_result" = 0 ] && [ -n "$namu_destination" ]; then
+    cd -- "$namu_destination" || return $?
   fi
   return "$namu_result"
 }

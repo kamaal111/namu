@@ -249,6 +249,13 @@ func confirmShellInstall(ctx context.Context, input io.Reader, out io.Writer) (b
 }
 
 func autoShellInstall(cmd *cobra.Command, _ []string) error {
+	selected, err := selectedIntegration(cmd)
+	if err != nil {
+		return err
+	}
+	if selected.Name != "" {
+		return nil
+	}
 	focus, _ := cmd.Flags().GetBool("focus")
 	noFocus, _ := cmd.Flags().GetBool("no-focus")
 	if !focus || noFocus || os.Getenv("NAMU_SHELL_INTEGRATION") == "1" || !interactive(cmd) || !terminalStream(cmd.OutOrStdout()) {
@@ -258,7 +265,7 @@ func autoShellInstall(cmd *cobra.Command, _ []string) error {
 	if shell != "bash" && shell != "zsh" {
 		return nil
 	}
-	err := offerShellInstall(cmd.Context(), shell, cmd.ErrOrStderr(), func() (bool, error) {
+	err = offerShellInstall(cmd.Context(), shell, cmd.ErrOrStderr(), func() (bool, error) {
 		return confirmShellInstall(cmd.Context(), cmd.InOrStdin(), cmd.ErrOrStderr())
 	})
 	if err != nil {

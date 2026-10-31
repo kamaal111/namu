@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/kamaal111/namu/internal/pathdisplay"
 	"github.com/kamaal111/namu/internal/testutil"
 	"os"
 	"os/exec"
@@ -52,12 +53,12 @@ func TestShellNavigationAndForwarding(t *testing.T) {
 				target := filepath.Join(root, "checkout with spaces")
 				must(t, os.Mkdir(target, 0700))
 				bin := filepath.Join(root, "namu")
-				must(t, os.WriteFile(bin, []byte("#!/bin/sh\n[ \"$NAMU_SHELL_INTEGRATION\" = 1 ] || exit 99\nif [ -n \"$TEST_OUTPUT\" ]; then printf '%s\\n' \"$TEST_OUTPUT\"; fi\necho diagnostics >&2\nexit \"$TEST_CODE\"\n"), 0700))
+				must(t, os.WriteFile(bin, []byte("#!/bin/sh\n[ \"$NAMU_SHELL_INTEGRATION\" = 1 ] || exit 99\nif [ -n \"$TEST_OUTPUT\" ]; then printf '%s\\n' \"$TEST_OUTPUT\"; fi\nif [ -n \"$TEST_DESTINATION\" ]; then printf '%s\\n' \"$TEST_DESTINATION\" > \"$NAMU_SHELL_RESULT\"; fi\necho diagnostics >&2\nexit \"$TEST_CODE\"\n"), 0700))
 				output := strings.ReplaceAll(tc.output, "{checkout}", target)
 				program := "export PATH=\"$TEST_PATH\"\n" + shellIntegration + "\nnamu " + tc.args + "\nnamu_code=$?\nprintf 'exit=%s\\npwd=%s\\n' \"$namu_code\" \"$(pwd -P)\"\n"
 				cmd := exec.Command(shell, "-f", "-c", program)
 				cmd.Dir = root
-				cmd.Env = append(os.Environ(), "TEST_PATH="+root+string(os.PathListSeparator)+os.Getenv("PATH"), "TEST_OUTPUT="+output, "TEST_CODE="+tc.code, "HOME="+root)
+				cmd.Env = append(os.Environ(), "TEST_PATH="+root+string(os.PathListSeparator)+os.Getenv("PATH"), "TEST_OUTPUT="+output, "TEST_CODE="+tc.code, "TEST_DESTINATION="+map[bool]string{true: filepath.Join(root, tc.destination), false: ""}[tc.navigate || tc.name == "setup-failure"], "TMPDIR="+root, "HOME="+root)
 				var diagnostics bytes.Buffer
 				cmd.Stderr = &diagnostics
 				result, err := cmd.Output()
@@ -68,6 +69,9 @@ func TestShellNavigationAndForwarding(t *testing.T) {
 				expected := map[bool]string{false: actualRoot, true: filepath.Join(actualRoot, tc.destination)}[tc.navigate]
 				prefix := map[bool]string{true: output + "\n", false: ""}[output != ""]
 				check(t, string(result) == prefix+"exit="+tc.code+"\npwd="+expected+"\n", string(result))
+				files, err := filepath.Glob(filepath.Join(root, "namu-navigation.*"))
+				must(t, err)
+				check(t, len(files) == 0, "navigation files must be removed")
 			})
 		}
 	}
@@ -76,31 +80,42 @@ func TestShellNavigationAndForwarding(t *testing.T) {
 func TestShellIntegrationWithRealCLIAndBothBackends(t *testing.T) {
 	binaryDir := buildShellCLI(t)
 	for _, shell := range []string{"bash", "zsh"} {
-		for _, backend := range []string{"false", "true"} {
-			for _, action := range []string{"create", "open"} {
-				t.Run(shell+"/herdr="+backend+"/"+action, func(t *testing.T) {
+		for _, tc := range []struct {
+			name              string
+			flags             []string
+			body              string
+			navigate, warning bool
+		}{
+			{name: "git", flags: []string{"--herdr=false"}, body: "exit 7", navigate: true},
+			{name: "herdr", flags: []string{"--herdr"}, body: `"$REAL_GIT" -C "$source" worktree add "$target" "$branch"`},
+			{name: "herdr-fallback", flags: []string{"--herdr"}, body: "exit 7", navigate: true, warning: true},
+			{name: "herdr-no-focus", flags: []string{"--herdr", "--no-focus"}, body: `"$REAL_GIT" -C "$source" worktree add "$target" "$branch"`},
+			{name: "git-no-focus", flags: []string{"--herdr=false", "--focus=false"}},
+		} {
+			for _, action := range []string{"create", "open", "existing"} {
+				t.Run(shell+"/"+tc.name+"/"+action, func(t *testing.T) {
 					repo := testutil.Repository(t)
-					log := testutil.Herdr(t, `if [ "$action" = create ]; then
- if "$REAL_GIT" -C "$source" show-ref --verify --quiet "refs/heads/$branch"; then
-  "$REAL_GIT" -C "$source" worktree add "$target" "$branch"
- else
-  "$REAL_GIT" -C "$source" worktree add -b "$branch" "$target" "$base"
- fi
-fi`)
+					body := map[string]string{"create": `"$REAL_GIT" -C "$source" branch "$branch" "$base"; ` + tc.body, "open": tc.body, "existing": map[bool]string{true: "exit 7", false: "exit 0"}[tc.warning]}[action]
+					testutil.Herdr(t, body)
 					testutil.Git(t, repo.Source, "branch", "feature/cards")
-					createArgs := map[string]string{"create": "feature/pricing --base main", "open": "feature/cards"}[action]
 					t.Setenv("HOME", repo.Main)
-					expectedBranch := map[string]string{"create": "feature/pricing", "open": "feature/cards"}[action]
-					program := "export PATH=\"$TEST_PATH\"\n" + shellIntegration + "\nnamu " + action + " " + createArgs + " --herdr=" + backend + "\nprintf 'pwd=%s\\n' \"$(pwd -P)\"\n"
+					existing := filepath.Join(repo.Main, "existing checkout")
+					testutil.Git(t, repo.Source, "branch", "feature/existing")
+					testutil.Git(t, repo.Source, "worktree", "add", existing, "feature/existing")
+					args := map[string]string{"create": "create feature/pricing --base main", "open": "open feature/cards", "existing": "open feature/existing"}[action]
+					expectedPath := map[string]string{"create": filepath.Join(repo.Main, ".agents/worktrees/feature/pricing"), "open": filepath.Join(repo.Main, ".agents/worktrees/feature/cards"), "existing": existing}[action]
+					program := "export PATH=\"$TEST_PATH\"\n" + shellIntegration + "\nnamu " + args + " " + strings.Join(tc.flags, " ") + "\nprintf 'pwd=%s\\n' \"$(pwd -P)\"\n"
 					cmd := exec.Command(shell, "-f", "-c", program)
 					cmd.Dir = repo.Source
 					cmd.Env = append(os.Environ(), "TEST_PATH="+binaryDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-					result, err := cmd.CombinedOutput()
+					var diagnostics bytes.Buffer
+					cmd.Stderr = &diagnostics
+					result, err := cmd.Output()
 					must(t, err)
-					expectedPath := filepath.Join(repo.Main, ".agents/worktrees", expectedBranch)
-					check(t, string(result) == "~/.agents/worktrees/"+expectedBranch+"\npwd="+expectedPath+"\n", string(result))
-					calls, _ := os.ReadFile(log)
-					check(t, (len(calls) > 0) == (backend == "true"), string(calls))
+					navigate := tc.navigate
+					expectedPWD := map[bool]string{true: expectedPath, false: repo.Source}[navigate]
+					check(t, string(result) == pathdisplay.Shorten(expectedPath)+"\npwd="+expectedPWD+"\n", string(result))
+					check(t, strings.Contains(diagnostics.String(), "Warning:") == tc.warning, diagnostics.String())
 				})
 			}
 		}
@@ -143,16 +158,17 @@ func TestInstalledShellIntegrationNavigates(t *testing.T) {
 func TestAutomaticShellInstallInTerminal(t *testing.T) {
 	binaryDir := buildShellCLI(t)
 	for _, tc := range []struct {
-		name, shell, answer, marker   string
-		args                          []string
-		redirected, prompt, installed bool
-		code                          int
+		name, shell, answer, marker, herdr string
+		args                               []string
+		redirected, prompt, installed      bool
+		code                               int
 	}{
 		{name: "accept", shell: "zsh", answer: "yes\n", args: []string{"open", "feature/cards"}, prompt: true, installed: true},
 		{name: "accept-bash", shell: "bash", answer: "yes\n", args: []string{"create", "feature/new", "--base", "main"}, prompt: true, installed: true},
 		{name: "decline", shell: "zsh", answer: "no\n", args: []string{"open", "feature/cards"}, prompt: true},
 		{name: "eof", shell: "zsh", answer: "\x04", args: []string{"open", "feature/cards"}, prompt: true},
 		{name: "interrupt", shell: "zsh", answer: "interrupt", args: []string{"open", "feature/cards"}, prompt: true, code: 130},
+		{name: "herdr", shell: "zsh", herdr: "1", args: []string{"open", "feature/cards"}},
 		{name: "loaded", shell: "zsh", marker: "1", args: []string{"open", "feature/cards"}},
 		{name: "no-focus", shell: "zsh", args: []string{"open", "feature/cards", "--no-focus"}},
 		{name: "focus-false", shell: "zsh", args: []string{"open", "feature/cards", "--focus=false"}},
@@ -167,7 +183,8 @@ func TestAutomaticShellInstallInTerminal(t *testing.T) {
 			t.Setenv("SHELL", "/bin/"+tc.shell)
 			t.Setenv("TERM", "xterm-256color")
 			t.Setenv("NAMU_SHELL_INTEGRATION", tc.marker)
-			t.Setenv("HERDR_ENV", "")
+			t.Setenv("HERDR_ENV", tc.herdr)
+			testutil.Herdr(t, `"$REAL_GIT" -C "$source" worktree add "$target" "$branch"`)
 			settings, err := json.Marshal(struct {
 				Args       []string
 				Answer     string
@@ -232,3 +249,24 @@ if settings["Redirected"]:
     output += proc.stdout.read()
 print(json.dumps({"Output": output.decode(errors="replace"), "Code": proc.returncode}))
 `
+
+func TestShellNavigationUnavailableStillRunsCommand(t *testing.T) {
+	for _, shell := range []string{"bash", "zsh"} {
+		t.Run(shell, func(t *testing.T) {
+			root := t.TempDir()
+			must(t, os.WriteFile(filepath.Join(root, "namu"), []byte("#!/bin/sh\n[ -z \"$NAMU_SHELL_RESULT\" ] || exit 99\nprintf 'checkout\\n'\nexit 7\n"), 0700))
+			program := "export PATH=\"$TEST_PATH\"\n" + shellIntegration + "\nnamu open feature/cards\ncode=$?\nprintf 'exit=%s\\npwd=%s\\n' \"$code\" \"$(pwd -P)\"\n"
+			cmd := exec.Command(shell, "-f", "-c", program)
+			cmd.Dir = root
+			cmd.Env = append(os.Environ(), "TEST_PATH="+root+string(os.PathListSeparator)+os.Getenv("PATH"), "TMPDIR="+filepath.Join(root, "missing"), "NAMU_SHELL_RESULT=stale")
+			var diagnostics bytes.Buffer
+			cmd.Stderr = &diagnostics
+			result, err := cmd.Output()
+			must(t, err)
+			actualRoot, err := filepath.EvalSymlinks(root)
+			must(t, err)
+			check(t, string(result) == "checkout\nexit=7\npwd="+actualRoot+"\n", string(result))
+			check(t, strings.Contains(diagnostics.String(), "Warning: cannot prepare shell navigation"), diagnostics.String())
+		})
+	}
+}
