@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"text/tabwriter"
 )
 
 func must(t *testing.T, err error) {
@@ -59,6 +60,51 @@ func TestCreatePrintsPathBeforeHookAndDoesNotLeakHookOutput(t *testing.T) {
 	listing, _, err := execute(t, dir, "list")
 	must(t, err)
 	check(t, strings.Contains(listing, "feature/cards"), listing)
+}
+
+func TestListNotes(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		addArgs  []string
+		commands [][]string
+		remove   []string
+		branch   string
+		notes    string
+	}{
+		{name: "ordinary", addArgs: []string{"-b", "feature/cards"}, branch: "feature/cards", notes: "—"},
+		{name: "detached", addArgs: []string{"--detach"}, branch: "(detached)", notes: "No branch checked out"},
+		{name: "locked", addArgs: []string{"-b", "feature/cards"}, commands: [][]string{{"worktree", "lock"}}, branch: "feature/cards", notes: "Locked against removal"},
+		{name: "prunable", addArgs: []string{"-b", "feature/cards"}, remove: []string{"checkout"}, branch: "feature/cards", notes: "Stale worktree registration"},
+		{name: "detached and locked", addArgs: []string{"--detach"}, commands: [][]string{{"worktree", "lock"}}, branch: "(detached)", notes: "No branch checked out; Locked against removal"},
+		{name: "detached and prunable", addArgs: []string{"--detach"}, remove: []string{"checkout"}, branch: "(detached)", notes: "No branch checked out; Stale worktree registration"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := testutil.Repository(t)
+			parent, err := filepath.EvalSymlinks(t.TempDir())
+			must(t, err)
+			path := filepath.Join(parent, "checkout")
+			args := append([]string{"worktree", "add"}, tt.addArgs...)
+			testutil.Git(t, repo.Source, append(args, path, "HEAD")...)
+			for _, command := range tt.commands {
+				testutil.Git(t, repo.Source, append(command, path)...)
+			}
+			for _, relative := range tt.remove {
+				must(t, os.RemoveAll(filepath.Join(parent, relative)))
+			}
+			head := testutil.Git(t, repo.Source, "rev-parse", "HEAD")
+			before := testutil.Git(t, repo.Source, "worktree", "list", "--porcelain")
+			out, diagnostics, err := execute(t, repo.Source, "list")
+			must(t, err)
+			var expected bytes.Buffer
+			w := tabwriter.NewWriter(&expected, 0, 4, 2, ' ', 0)
+			_, err = w.Write([]byte("BRANCH\tPATH\tHEAD\tNOTES\nmain\t" + repo.Main + "\t" + head + "\t—\n" + tt.branch + "\t" + path + "\t" + head + "\t" + tt.notes + "\n"))
+			must(t, err)
+			must(t, w.Flush())
+			check(t, out == expected.String(), "got:\n"+out+"want:\n"+expected.String())
+			check(t, diagnostics == "", diagnostics)
+			check(t, testutil.Git(t, repo.Source, "worktree", "list", "--porcelain") == before, "list must preserve worktree registrations and locks")
+		})
+	}
 }
 func TestCreateRejectsEmptyBaseAndConflictingFlags(t *testing.T) {
 	_, _, err := execute(t, t.TempDir(), "create", "feature/cards", "--base", "")

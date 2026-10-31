@@ -100,21 +100,25 @@ func New(dir string) *cobra.Command {
 			return err
 		}
 		w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-		fmt.Fprintln(w, "BRANCH\tPATH\tHEAD\tSTATE")
+		fmt.Fprintln(w, "BRANCH\tPATH\tHEAD\tNOTES")
 		for _, tree := range trees {
 			branch := tree.Branch
-			state := ""
+			var notes []string
 			if branch == "" {
 				branch = "(detached)"
-				state = "detached"
+				notes = append(notes, "No branch checked out")
 			}
 			if tree.Locked != "" {
-				state += " locked"
+				notes = append(notes, "Locked against removal")
 			}
 			if tree.Prunable != "" {
-				state += " prunable"
+				notes = append(notes, "Stale worktree registration")
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", branch, pathdisplay.Shorten(tree.Path), tree.Head, state)
+			note := strings.Join(notes, "; ")
+			if note == "" {
+				note = "—"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", branch, pathdisplay.Shorten(tree.Path), tree.Head, note)
 		}
 		return w.Flush()
 	}}
