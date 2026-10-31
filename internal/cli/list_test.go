@@ -19,10 +19,6 @@ case "$1" in
   repo) echo '{"nameWithOwner":"team/project","url":"https://github.example.com/team/project"}'; exit 0 ;;
   auth) exit 0 ;;
 esac
-case "$6" in
-  main) echo '[]'; exit 0 ;;
-  feature/fails) echo unavailable >&2; exit 1 ;;
-esac
 `
 
 func TestListWithoutGitHub(t *testing.T) {
@@ -44,9 +40,17 @@ func TestListPRColumn(t *testing.T) {
 	for _, tt := range []struct {
 		name, body, header, blankCell, cardsCell string
 	}{
-		{"open preferred", githubReady + `case "$8" in open) echo '[{"number":42}]' ;; all) echo '[{"number":40}]' ;; esac`, "BRANCH\tPATH\tPR\tHEAD\tNOTES\n", "\t", "#42\t"},
-		{"merged or closed", githubReady + `case "$8" in open) echo '[]' ;; all) echo '[{"number":40}]' ;; esac`, "BRANCH\tPATH\tPR\tHEAD\tNOTES\n", "\t", "#40\t"},
-		{"no matches", githubReady + `echo '[]'`, "BRANCH\tPATH\tHEAD\tNOTES\n", "", ""},
+		{"open preferred", githubReady + `echo '{"data":{"repository":{
+			"open0":{"nodes":[]}, "closed0":{"nodes":[]},
+			"open1":{"nodes":[{"number":42}]}, "closed1":{"nodes":[{"number":50}]},
+			"open2":null
+		}},"errors":[{"message":"unavailable","path":["repository","open2"]}]}'
+exit 1`, "BRANCH\tPATH\tPR\tHEAD\tNOTES\n", "\t", "#42\t"},
+		{"merged or closed", githubReady + `echo '{"data":{"repository":{
+			"open0":{"nodes":[]}, "closed0":{"nodes":[]},
+			"open1":{"nodes":[]}, "closed1":{"nodes":[{"number":40}]}
+		}}}'`, "BRANCH\tPATH\tPR\tHEAD\tNOTES\n", "\t", "#40\t"},
+		{"no matches", githubReady + `echo '{"data":{"repository":{}}}'`, "BRANCH\tPATH\tHEAD\tNOTES\n", "", ""},
 		{"lookup failure", githubReady + `echo unavailable >&2; exit 1`, "BRANCH\tPATH\tHEAD\tNOTES\n", "", ""},
 		{"unauthenticated", `case "$1" in repo) echo '{"nameWithOwner":"team/project","url":"https://github.example.com/team/project"}' ;; *) exit 1 ;; esac`, "BRANCH\tPATH\tHEAD\tNOTES\n", "", ""},
 		{"unresolved repository", "exit 1", "BRANCH\tPATH\tHEAD\tNOTES\n", "", ""},
