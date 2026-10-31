@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/kamaal111/namu/compare/v0.2.0...v0.3.0) (2026-10-31)
+
+
+### Features
+
+* install shell navigation and delete multiple worktrees ([70a5821](https://github.com/kamaal111/namu/commit/70a5821a0382486445236490269a3b14b5a95d52))
+
 ## [0.2.0](https://github.com/kamaal111/namu/compare/v0.1.0...v0.2.0) (2026-10-30)
 
 
