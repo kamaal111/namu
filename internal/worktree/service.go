@@ -12,15 +12,17 @@ import (
 
 	"github.com/kamaal111/namu/internal/config"
 	git "github.com/kamaal111/namu/internal/git"
+	"github.com/kamaal111/namu/internal/integration"
 	"github.com/kamaal111/namu/internal/pathdisplay"
 	"github.com/kamaal111/namu/internal/setup"
 )
 
 type Service struct {
-	Repo     git.Repo
-	Herdr    bool
-	NoFocus  bool
-	Out, Err io.Writer
+	Repo        git.Repo
+	Integration integration.Hooks
+	Fallback    integration.Hooks
+	NoFocus     bool
+	Out, Err    io.Writer
 }
 
 func (s *Service) path(ctx context.Context, branch string) (string, error) {
@@ -109,8 +111,11 @@ func (s *Service) createAt(ctx context.Context, request git.WorktreeRequest, rev
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	if s.Herdr {
-		if err := s.createHerdr(ctx, request, revision); err != nil {
+	var outcome creationOutcome
+	if s.Integration.Create != nil {
+		var err error
+		outcome, err = s.createIntegrated(ctx, request, revision)
+		if err != nil {
 			return err
 		}
 		if upstream != "" {
@@ -121,7 +126,17 @@ func (s *Service) createAt(ctx context.Context, request git.WorktreeRequest, rev
 	} else if err := git.AddWorktree(ctx, s.Repo.Source, request); err != nil {
 		return err
 	}
-	return s.afterCreate(ctx, branch, path, cfg)
+	if err := s.afterCreate(ctx, branch, path, cfg); err != nil {
+		return err
+	}
+	input := s.openRequest(path, branch)
+	if outcome.Recovered {
+		return s.fallback(ctx, input)
+	}
+	if outcome.OpenHandled {
+		return ctx.Err()
+	}
+	return s.openIntegrated(ctx, input)
 }
 func (s *Service) Create(ctx context.Context, branch, base, remote string) error {
 	if _, err := git.Branches(ctx, s.Repo.Source); err != nil {
@@ -200,13 +215,8 @@ func (s *Service) Open(ctx context.Context, label string) error {
 			if err != nil {
 				return fmt.Errorf("registered checkout unavailable: %w", err)
 			}
-			if s.Herdr {
-				if err := s.herdr(ctx, "open", path, "", ""); err != nil {
-					if ctx.Err() != nil {
-						return ctx.Err()
-					}
-					fmt.Fprintf(s.Err, "Warning: Herdr open failed; using existing Git checkout: %v\n", err)
-				}
+			if err := s.openIntegrated(ctx, s.openRequest(path, selected.Name)); err != nil {
+				return err
 			}
 			return s.printPath(path)
 		}

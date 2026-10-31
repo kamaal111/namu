@@ -24,14 +24,15 @@ func service(cmd *cobra.Command, dir string) (*worktree.Service, error) {
 		return nil, err
 	}
 	s := &worktree.Service{Repo: repo, Out: cmd.OutOrStdout(), Err: cmd.ErrOrStderr()}
-	if cmd.Flags().Lookup("herdr") != nil {
-		enabled, _ := cmd.Flags().GetBool("herdr")
-		if !cmd.Flags().Changed("herdr") {
-			enabled = os.Getenv("HERDR_ENV") == "1"
-		}
+	selected, err := selectedIntegration(cmd)
+	if err != nil {
+		return nil, err
+	}
+	s.Integration, s.Fallback = selected, shellIntegrationHooks()
+	if cmd.Flags().Lookup("focus") != nil {
 		focus, _ := cmd.Flags().GetBool("focus")
 		noFocus, _ := cmd.Flags().GetBool("no-focus")
-		s.Herdr, s.NoFocus = enabled, !focus || noFocus
+		s.NoFocus = !focus || noFocus
 	}
 	return s, nil
 }
@@ -152,7 +153,7 @@ func New(dir string) *cobra.Command {
 	}}
 	for _, cmd := range []*cobra.Command{create, open} {
 		cmd.PreRunE = autoShellInstall
-		cmd.Flags().Bool("herdr", false, "Use Herdr (automatic inside Herdr; --herdr=false disables)")
+		registerIntegrations(cmd)
 		cmd.Flags().Bool("focus", true, "Focus the workspace and change directory with shell integration")
 		cmd.Flags().Bool("no-focus", false, "Keep current workspace and shell directory")
 		cmd.MarkFlagsMutuallyExclusive("focus", "no-focus")

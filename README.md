@@ -152,8 +152,11 @@ eval "$(namu shell-init zsh)"
 eval "$(namu shell-init bash)"
 ```
 
-The wrapper prints the checkout path and changes directory after setup succeeds,
-for both Git and Herdr. Use `--no-focus` to keep your shell directory. Failures and
+The wrapper prints the checkout path and changes directory after setup succeeds
+when using Git. When Herdr successfully handles navigation, the invoking shell
+stays in its current directory. If Herdr fails and Namu safely recovers, shell
+navigation is used instead. Automatic shell installation is not offered while
+Herdr is selected. Use `--no-focus` to keep your shell directory. Failures and
 picker cancellation never change directory. The wrapper buffers stdout until the
 command finishes, while diagnostics remain on stderr. Other commands pass through.
 Use `command namu` to bypass the wrapper in scripts or command substitutions.

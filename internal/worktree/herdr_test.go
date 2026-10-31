@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	git "github.com/kamaal111/namu/internal/git"
+	"github.com/kamaal111/namu/internal/herdr"
 	"github.com/kamaal111/namu/internal/testutil"
 	"os"
 	"os/exec"
@@ -14,7 +15,7 @@ import (
 
 func TestHerdrCreatesCheckoutAndRunsSetupOnce(t *testing.T) {
 	s, out, diagnostics := fixture(t)
-	s.Herdr = true
+	s.Integration = herdr.Hooks()
 	log := testutil.Herdr(t, `"$REAL_GIT" -C "$source" worktree add -b "$branch" "$target" "$base"
 echo '{"result":"workspace"}'`)
 	write(t, filepath.Join(s.Repo.Source, ".namu.toml"), "[setup]\ncommand = ['sh', '-c', 'echo setup >> count']\n")
@@ -39,7 +40,7 @@ func TestHerdrFailureFallsBackToGit(t *testing.T) {
 	} {
 		t.Run(body, func(t *testing.T) {
 			s, out, diagnostics := fixture(t)
-			s.Herdr = true
+			s.Integration = herdr.Hooks()
 			testutil.Herdr(t, body)
 			must(t, s.Create(context.Background(), "feature/cards", "main", ""))
 			path := filepath.Join(s.Repo.Main, ".agents/worktrees/feature/cards")
@@ -54,7 +55,7 @@ func TestHerdrOpenExistingNoFocusDoesNotRunSetup(t *testing.T) {
 	s, out, diagnostics := fixture(t)
 	must(t, s.Create(context.Background(), "feature/cards", "main", ""))
 	out.Reset()
-	s.Herdr, s.NoFocus = true, true
+	s.Integration, s.NoFocus = herdr.Hooks(), true
 	log := testutil.Herdr(t, "echo workspace")
 	write(t, filepath.Join(s.Repo.Source, ".namu.toml"), "invalid toml!!!")
 	must(t, s.Open(context.Background(), "feature/cards"))
@@ -68,7 +69,7 @@ func TestHerdrOpenExistingNoFocusDoesNotRunSetup(t *testing.T) {
 
 func TestHerdrOpenExistingFailureStillPrintsPath(t *testing.T) {
 	s, out, diagnostics := fixture(t)
-	s.Herdr = true
+	s.Integration = herdr.Hooks()
 	testutil.Herdr(t, "exit 7")
 	must(t, s.Open(context.Background(), "main"))
 	ok(t, out.String() == s.Repo.Main+"\n", out.String())
@@ -77,7 +78,7 @@ func TestHerdrOpenExistingFailureStillPrintsPath(t *testing.T) {
 
 func TestHerdrConflictingPartialStateIsPreserved(t *testing.T) {
 	s, out, diagnostics := fixture(t)
-	s.Herdr = true
+	s.Integration = herdr.Hooks()
 	testutil.Herdr(t, `mkdir -p "$target"; echo keep > "$target/file"; exit 7`)
 	err := s.Create(context.Background(), "feature/cards", "main", "")
 	ok(t, err != nil, "must fail on conflicting destination")
@@ -95,7 +96,7 @@ func TestHerdrRemoteOpenPreservesTracking(t *testing.T) {
 	run(t, remote, "branch", "feature/search")
 	run(t, s.Repo.Main, "remote", "add", "origin", remote)
 	run(t, s.Repo.Main, "fetch", "origin")
-	s.Herdr = true
+	s.Integration = herdr.Hooks()
 	testutil.Herdr(t, `"$REAL_GIT" -C "$source" worktree add -b "$branch" "$target" "$base"`)
 	must(t, s.Open(context.Background(), "origin/feature/search"))
 	ok(t, run(t, s.Repo.Main, "config", "branch.feature/search.remote") == "origin", "must track remote")
@@ -105,7 +106,7 @@ func TestHerdrRemoteOpenPreservesTracking(t *testing.T) {
 func TestHerdrLocalBranchOpenUsesExistingBranch(t *testing.T) {
 	s, out, diagnostics := fixture(t)
 	run(t, s.Repo.Source, "branch", "feature/cards")
-	s.Herdr = true
+	s.Integration = herdr.Hooks()
 	testutil.Herdr(t, `"$REAL_GIT" -C "$source" worktree add "$target" "$branch"`)
 	must(t, s.Open(context.Background(), "feature/cards"))
 	ok(t, diagnostics.Len() == 0, diagnostics.String())
@@ -118,7 +119,7 @@ func TestHerdrLinkedInvocationUsesMainManagedPath(t *testing.T) {
 	must(t, s.Create(ctx, "feature/cards", "main", ""))
 	repo, err := git.Discover(ctx, filepath.Join(s.Repo.Main, ".agents/worktrees/feature/cards"))
 	must(t, err)
-	s.Repo, s.Herdr = repo, true
+	s.Repo, s.Integration = repo, herdr.Hooks()
 	out.Reset()
 	log := testutil.Herdr(t, `"$REAL_GIT" -C "$source" worktree add -b "$branch" "$target" "$base"`)
 	must(t, s.Create(ctx, "feature/pricing", "feature/cards", ""))
@@ -131,7 +132,7 @@ func TestHerdrLinkedInvocationUsesMainManagedPath(t *testing.T) {
 
 func TestHerdrSetupFailureDoesNotFallbackOrRecreate(t *testing.T) {
 	s, out, diagnostics := fixture(t)
-	s.Herdr = true
+	s.Integration = herdr.Hooks()
 	testutil.Herdr(t, `"$REAL_GIT" -C "$source" worktree add -b "$branch" "$target" "$base"`)
 	write(t, filepath.Join(s.Repo.Source, ".namu.toml"), "[setup]\ncommand = ['sh', '-c', 'echo failed >&2; exit 7']\n")
 	err := s.Create(context.Background(), "feature/cards", "main", "")
@@ -143,7 +144,7 @@ func TestHerdrSetupFailureDoesNotFallbackOrRecreate(t *testing.T) {
 
 func TestHerdrMissingExecutableFallsBack(t *testing.T) {
 	s, out, diagnostics := fixture(t)
-	s.Herdr = true
+	s.Integration = herdr.Hooks()
 	bin := t.TempDir()
 	realGit, err := exec.LookPath("git")
 	must(t, err)
@@ -156,7 +157,7 @@ func TestHerdrMissingExecutableFallsBack(t *testing.T) {
 
 func TestHerdrCancellationDoesNotFallback(t *testing.T) {
 	s, out, diagnostics := fixture(t)
-	s.Herdr = true
+	s.Integration = herdr.Hooks()
 	testutil.Herdr(t, "exit 7")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -176,7 +177,7 @@ func TestHerdrConflictingBranchOrCheckoutIsPreserved(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, out, diagnostics := fixture(t)
-			s.Herdr = true
+			s.Integration = herdr.Hooks()
 			testutil.Herdr(t, tc.body)
 			err := s.Create(context.Background(), "feature/cards", "main", "")
 			ok(t, err != nil, "must reject conflicting state")
