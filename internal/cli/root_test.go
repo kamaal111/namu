@@ -102,14 +102,17 @@ func TestDeleteContinuesAfterFailuresAndDeduplicates(t *testing.T) {
 	out, diagnostics, err := execute(t, repo.Source, "delete", "feature/cards", "feature/cards", "feature/dirty", "feature/locked", "feature/external", "missing", "main", "feature/last")
 	check(t, err != nil, "any failure must fail the batch")
 	check(t, out == "", out)
-	check(t, strings.Count(diagnostics, "Removed ") == 2, diagnostics)
-	for _, branch := range []string{"feature/dirty", "feature/locked", "feature/external", "missing", "main"} {
+	check(t, strings.Count(diagnostics, "Removed ") == 3, diagnostics)
+	for _, branch := range []string{"feature/dirty", "feature/locked", "missing", "main"} {
 		check(t, strings.Contains(err.Error(), branch), err.Error())
 	}
-	for _, path := range []string{dirty, locked, external, repo.Main} {
+	for _, path := range []string{dirty, locked, repo.Main} {
 		_, err := os.Stat(path)
 		must(t, err)
 	}
+	_, statErr := os.Stat(external)
+	check(t, os.IsNotExist(statErr), "external checkout must be removed")
+	check(t, testutil.Git(t, repo.Source, "branch", "--list", "feature/external") != "", "external branch must remain")
 	_, _, err = execute(t, repo.Source, "delete")
 	check(t, err != nil, "missing argument must fail")
 }
