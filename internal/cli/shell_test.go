@@ -26,22 +26,26 @@ func TestShellInitOutsideRepository(t *testing.T) {
 func TestShellNavigationAndForwarding(t *testing.T) {
 	for _, shell := range []string{"bash", "zsh"} {
 		for _, tc := range []struct {
-			name, args, output, code string
-			navigate                 bool
+			name, args, output, code, destination string
+			navigate                              bool
 		}{
-			{"create", "create feature/cards", "checkout", "0", true},
-			{"open", "open feature/cards", "checkout", "0", true},
-			{"focus", "create feature/cards --focus", "checkout", "0", true},
-			{"no-focus", "create feature/cards --no-focus", "checkout", "0", false},
-			{"focus-false", "create feature/cards --focus=false", "checkout", "0", false},
-			{"no-focus-false", "open feature/cards --no-focus=false", "checkout", "0", true},
-			{"setup-failure", "create feature/cards", "checkout", "1", false},
-			{"cancel", "open", "", "0", false},
-			{"interrupt", "open", "", "130", false},
-			{"help", "open --help", "help", "0", false},
-			{"other", "list", "listing", "0", false},
-			{"flag-as-value", "create cards --base --no-focus", "checkout", "0", true},
-			{"end-options", "create -- --no-focus", "checkout", "0", true},
+			{"create", "create feature/cards", "{checkout}", "0", "checkout with spaces", true},
+			{"open", "open feature/cards", "{checkout}", "0", "checkout with spaces", true},
+			{"home", "open main", "~", "0", "", true},
+			{"home-child", "create feature/cards", "~/checkout with spaces", "0", "checkout with spaces", true},
+			{"home-no-focus", "open main --no-focus", "~", "0", "", false},
+			{"home-failure", "open main", "~", "1", "", false},
+			{"focus", "create feature/cards --focus", "{checkout}", "0", "checkout with spaces", true},
+			{"no-focus", "create feature/cards --no-focus", "{checkout}", "0", "checkout with spaces", false},
+			{"focus-false", "create feature/cards --focus=false", "{checkout}", "0", "checkout with spaces", false},
+			{"no-focus-false", "open feature/cards --no-focus=false", "{checkout}", "0", "checkout with spaces", true},
+			{"setup-failure", "create feature/cards", "{checkout}", "1", "checkout with spaces", false},
+			{"cancel", "open", "", "0", "checkout with spaces", false},
+			{"interrupt", "open", "", "130", "checkout with spaces", false},
+			{"help", "open --help", "help", "0", "checkout with spaces", false},
+			{"other", "list", "listing", "0", "checkout with spaces", false},
+			{"flag-as-value", "create cards --base --no-focus", "{checkout}", "0", "checkout with spaces", true},
+			{"end-options", "create -- --no-focus", "{checkout}", "0", "checkout with spaces", true},
 		} {
 			t.Run(shell+"/"+tc.name, func(t *testing.T) {
 				root := t.TempDir()
@@ -49,11 +53,11 @@ func TestShellNavigationAndForwarding(t *testing.T) {
 				must(t, os.Mkdir(target, 0700))
 				bin := filepath.Join(root, "namu")
 				must(t, os.WriteFile(bin, []byte("#!/bin/sh\n[ \"$NAMU_SHELL_INTEGRATION\" = 1 ] || exit 99\nif [ -n \"$TEST_OUTPUT\" ]; then printf '%s\\n' \"$TEST_OUTPUT\"; fi\necho diagnostics >&2\nexit \"$TEST_CODE\"\n"), 0700))
-				output := strings.ReplaceAll(tc.output, "checkout", target)
+				output := strings.ReplaceAll(tc.output, "{checkout}", target)
 				program := "export PATH=\"$TEST_PATH\"\n" + shellIntegration + "\nnamu " + tc.args + "\nnamu_code=$?\nprintf 'exit=%s\\npwd=%s\\n' \"$namu_code\" \"$(pwd -P)\"\n"
 				cmd := exec.Command(shell, "-f", "-c", program)
 				cmd.Dir = root
-				cmd.Env = append(os.Environ(), "TEST_PATH="+root+string(os.PathListSeparator)+os.Getenv("PATH"), "TEST_OUTPUT="+output, "TEST_CODE="+tc.code)
+				cmd.Env = append(os.Environ(), "TEST_PATH="+root+string(os.PathListSeparator)+os.Getenv("PATH"), "TEST_OUTPUT="+output, "TEST_CODE="+tc.code, "HOME="+root)
 				var diagnostics bytes.Buffer
 				cmd.Stderr = &diagnostics
 				result, err := cmd.Output()
@@ -61,7 +65,7 @@ func TestShellNavigationAndForwarding(t *testing.T) {
 				check(t, diagnostics.String() == "diagnostics\n", diagnostics.String())
 				actualRoot, err := filepath.EvalSymlinks(root)
 				must(t, err)
-				expected := map[bool]string{false: actualRoot, true: filepath.Join(actualRoot, "checkout with spaces")}[tc.navigate]
+				expected := map[bool]string{false: actualRoot, true: filepath.Join(actualRoot, tc.destination)}[tc.navigate]
 				prefix := map[bool]string{true: output + "\n", false: ""}[output != ""]
 				check(t, string(result) == prefix+"exit="+tc.code+"\npwd="+expected+"\n", string(result))
 			})
@@ -85,6 +89,7 @@ func TestShellIntegrationWithRealCLIAndBothBackends(t *testing.T) {
 fi`)
 					testutil.Git(t, repo.Source, "branch", "feature/cards")
 					createArgs := map[string]string{"create": "feature/pricing --base main", "open": "feature/cards"}[action]
+					t.Setenv("HOME", repo.Main)
 					expectedBranch := map[string]string{"create": "feature/pricing", "open": "feature/cards"}[action]
 					program := "export PATH=\"$TEST_PATH\"\n" + shellIntegration + "\nnamu " + action + " " + createArgs + " --herdr=" + backend + "\nprintf 'pwd=%s\\n' \"$(pwd -P)\"\n"
 					cmd := exec.Command(shell, "-f", "-c", program)
@@ -93,7 +98,7 @@ fi`)
 					result, err := cmd.CombinedOutput()
 					must(t, err)
 					expectedPath := filepath.Join(repo.Main, ".agents/worktrees", expectedBranch)
-					check(t, string(result) == expectedPath+"\npwd="+expectedPath+"\n", string(result))
+					check(t, string(result) == "~/.agents/worktrees/"+expectedBranch+"\npwd="+expectedPath+"\n", string(result))
 					calls, _ := os.ReadFile(log)
 					check(t, (len(calls) > 0) == (backend == "true"), string(calls))
 				})

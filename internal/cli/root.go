@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"github.com/kamaal111/namu/internal/pathdisplay"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -113,7 +114,7 @@ func New(dir string) *cobra.Command {
 			if tree.Prunable != "" {
 				state += " prunable"
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", branch, tree.Path, tree.Head, state)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", branch, pathdisplay.Shorten(tree.Path), tree.Head, state)
 		}
 		return w.Flush()
 	}}

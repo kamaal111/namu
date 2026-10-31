@@ -8,6 +8,7 @@ import (
 
 	git "github.com/kamaal111/namu/internal/git"
 	"github.com/kamaal111/namu/internal/herdr"
+	"github.com/kamaal111/namu/internal/pathdisplay"
 )
 
 func (s *Service) herdr(ctx context.Context, action, path, branch, revision string) error {
@@ -47,11 +48,11 @@ func (s *Service) createHerdr(ctx context.Context, request git.WorktreeRequest, 
 		}
 		head, err := git.ResolveCommit(ctx, path, "HEAD")
 		if err != nil || head != revision {
-			return fmt.Errorf("cannot verify Herdr checkout at %s; existing state preserved", path)
+			return fmt.Errorf("cannot verify Herdr checkout at %s; existing state preserved", pathdisplay.Shorten(path))
 		}
 		ref, err := git.Text(ctx, path, "symbolic-ref", "--quiet", "HEAD")
 		if err != nil || ref != "refs/heads/"+branch {
-			return fmt.Errorf("cannot verify checkout branch at %s; existing state preserved", path)
+			return fmt.Errorf("cannot verify checkout branch at %s; existing state preserved", pathdisplay.Shorten(path))
 		}
 		return nil
 	}
@@ -59,7 +60,7 @@ func (s *Service) createHerdr(ctx context.Context, request git.WorktreeRequest, 
 		fmt.Fprintln(s.Err, "Warning: Herdr did not register the requested checkout; falling back to Git")
 	}
 	if _, err := os.Lstat(path); !os.IsNotExist(err) {
-		return fmt.Errorf("cannot safely fall back: destination unavailable or already exists: %s; existing state preserved", path)
+		return fmt.Errorf("cannot safely fall back: destination unavailable or already exists: %s; existing state preserved", pathdisplay.Shorten(path))
 	}
 	exists, err := git.LocalBranchExists(ctx, s.Repo.Source, branch)
 	if err != nil {

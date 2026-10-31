@@ -28,6 +28,10 @@ namu() {
   fi
   if [ -n "$namu_path" ]; then printf '%s\n' "$namu_path"; fi
   if [ "$namu_result" = 0 ] && [ -n "$namu_path" ]; then
+    case "$namu_path" in
+      '~') namu_path=$HOME ;;
+      '~/'*) namu_path="$HOME/${namu_path#\~/}" ;;
+    esac
     cd -- "$namu_path" || return $?
   fi
   return "$namu_result"

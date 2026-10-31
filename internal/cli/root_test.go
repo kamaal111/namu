@@ -131,3 +131,30 @@ func TestDeleteProtectsInvokingCheckoutAndContinues(t *testing.T) {
 	_, err = os.Stat(current)
 	must(t, err)
 }
+
+func TestHomePathsAcrossCheckoutCommands(t *testing.T) {
+	t.Setenv("HERDR_ENV", "")
+	repo := testutil.Repository(t)
+	t.Setenv("HOME", repo.Main)
+	target := "~/.agents/worktrees/feature/cards"
+	out, _, err := execute(t, repo.Source, "create", "feature/cards", "--base", "main")
+	must(t, err)
+	check(t, out == target+"\n", out)
+	out, _, err = execute(t, repo.Source, "open", "feature/cards")
+	must(t, err)
+	check(t, out == target+"\n", out)
+	out, _, err = execute(t, repo.Source, "list")
+	must(t, err)
+	check(t, strings.Contains(out, target), out)
+	check(t, !strings.Contains(out, repo.Main), out)
+	_, _, err = execute(t, repo.Source, "create", "feature/other", "--base", "main")
+	must(t, err)
+	_, diagnostics, err := execute(t, repo.Source, "delete", "feature/cards")
+	must(t, err)
+	check(t, diagnostics == "Removed "+target+" (branch feature/cards retained)\n", diagnostics)
+	must(t, os.WriteFile(filepath.Join(repo.Source, ".namu.toml"), []byte("[setup]\ncommand = ['sh', '-c', 'exit 1']\n"), 0600))
+	out, _, err = execute(t, repo.Source, "create", "feature/fails", "--base", "main")
+	check(t, err != nil, "setup must fail")
+	check(t, out == "~/.agents/worktrees/feature/fails\n", out)
+	check(t, strings.Contains(err.Error(), "checkout preserved at ~/.agents/worktrees/feature/fails; retry from ~:"), err.Error())
+}

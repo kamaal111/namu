@@ -12,6 +12,7 @@ import (
 
 	"github.com/kamaal111/namu/internal/config"
 	git "github.com/kamaal111/namu/internal/git"
+	"github.com/kamaal111/namu/internal/pathdisplay"
 	"github.com/kamaal111/namu/internal/setup"
 )
 
@@ -37,12 +38,15 @@ func (s *Service) path(ctx context.Context, branch string) (string, error) {
 			return "", err
 		}
 		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return "", fmt.Errorf("managed path must contain only directories without symlinks: %s", path)
+			return "", fmt.Errorf("managed path must contain only directories without symlinks: %s", pathdisplay.Shorten(path))
 		}
 	}
 	return path, nil
 }
-func (s *Service) printPath(path string) error { _, err := fmt.Fprintln(s.Out, path); return err }
+func (s *Service) printPath(path string) error {
+	_, err := fmt.Fprintln(s.Out, pathdisplay.Shorten(path))
+	return err
+}
 func (s *Service) ensureExcluded() error {
 	root, err := os.OpenRoot(s.Repo.Common)
 	if err != nil {
@@ -70,10 +74,10 @@ func (s *Service) ensureExcluded() error {
 }
 func (s *Service) afterCreate(ctx context.Context, branch, path string, cfg config.Config) error {
 	if err := s.printPath(path); err != nil {
-		return fmt.Errorf("checkout preserved at %s; cannot print path: %w", path, err)
+		return fmt.Errorf("checkout preserved at %s; cannot print path: %w", pathdisplay.Shorten(path), err)
 	}
 	if err := setup.Run(ctx, s.Repo, path, cfg, s.Err); err != nil {
-		return fmt.Errorf("setup failed; checkout preserved at %s; retry from %s: namu setup %s: %w", path, s.Repo.Source, shellArgument(branch), err)
+		return fmt.Errorf("setup failed; checkout preserved at %s; retry from %s: namu setup %s: %w", pathdisplay.Shorten(path), pathdisplay.Shorten(s.Repo.Source), shellArgument(branch), err)
 	}
 	return nil
 }
@@ -84,7 +88,7 @@ func (s *Service) prepare(ctx context.Context, branch string) (string, config.Co
 		return "", cfg, err
 	}
 	if _, err = os.Lstat(path); err == nil {
-		return "", cfg, fmt.Errorf("destination already exists: %s", path)
+		return "", cfg, fmt.Errorf("destination already exists: %s", pathdisplay.Shorten(path))
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", cfg, err
 	}
@@ -111,7 +115,7 @@ func (s *Service) createAt(ctx context.Context, request git.WorktreeRequest, rev
 		}
 		if upstream != "" {
 			if _, err := git.Run(ctx, s.Repo.Source, "branch", "--set-upstream-to="+upstream, "--", branch); err != nil {
-				return fmt.Errorf("checkout preserved at %s; cannot configure upstream: %w", path, err)
+				return fmt.Errorf("checkout preserved at %s; cannot configure upstream: %w", pathdisplay.Shorten(path), err)
 			}
 		}
 	} else if err := git.AddWorktree(ctx, s.Repo.Source, request); err != nil {
@@ -286,7 +290,7 @@ func (s *Service) Delete(ctx context.Context, branch string) error {
 	if _, err := git.Run(ctx, s.Repo.Source, "worktree", "remove", "--", path); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(s.Err, "Removed %s (branch %s retained)\n", path, branch)
+	_, err = fmt.Fprintf(s.Err, "Removed %s (branch %s retained)\n", pathdisplay.Shorten(path), branch)
 	return err
 }
 func (s *Service) Setup(ctx context.Context, branch string) error {
