@@ -61,7 +61,10 @@ namu delete feature/pricing feature/release
   refs and `gitbutler/workspace` are excluded. Input and stderr must be terminals;
   stdout can be redirected.
 - `list` shows every registered worktree, its branch, home-abbreviated path, commit, and
-  detached/locked/prunable state. It does not fetch or prune anything.
+  a `NOTES` column. Notes explain unusual conditions: `No branch checked out`,
+  `Locked against removal`, or `Stale worktree registration`. Multiple notes are
+  separated by semicolons; `—` means none of these conditions apply, not that the
+  checkout has no uncommitted changes. It does not fetch or prune anything.
 - `delete BRANCH [BRANCH...]` removes matching registered linked checkouts at any
   location, including checkouts created outside Namu, and **retains their branches**. Each unique branch is attempted in argument order;
   failures are reported together and make the command exit 1, while remaining
