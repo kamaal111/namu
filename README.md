@@ -120,6 +120,9 @@ automatically create or reuse a Rex session named after the branch. New
 sessions start an interactive shell in the checkout directory after setup
 succeeds. The `rex` executable must be on `PATH`.
 
+> **Before using Rex integration:** In **Rex Settings → Rex Server**, enable
+> **Remote Control**. This lets Namu switch the app to the worktree's session.
+
 ```sh
 namu create feature/cards --rex
 namu open feature/cards --no-focus
@@ -128,7 +131,7 @@ namu open feature/cards --rex=false
 
 Focus is enabled by default. Namu honors `REX_CLIENT`; otherwise it selects
 the connected app owning the current Rex pane, falling back to Rex's default
-single-app selection. App focus requires Rex Remote Control to be enabled.
+single-app selection. Enable Remote Control as described above for app focus.
 `--no-focus` and `--focus=false` create or reuse the session in the background.
 A reused terminal retains its current directory and running processes.
 
@@ -145,6 +148,24 @@ After an interrupted process leaves a stale `.lock` file, remove that file
 only once the associated operation has stopped. Branch names longer than
 Rex's 128-character label limit select fallback. If both Herdr and Rex are
 detected, disable one explicitly with `--herdr=false` or `--rex=false`.
+
+### Troubleshooting
+
+If Namu reports `Rex.app is not accepting actions`, enable **Remote Control**
+in **Rex Settings → Rex Server**. The Git checkout and Rex session can already
+exist even though switching to the session failed. After enabling the setting,
+open the existing checkout again:
+
+```sh
+namu open failing-to-open
+```
+
+Namu reuses the saved live Rex session. To intentionally create or reuse the
+session in the background without displaying it, use:
+
+```sh
+namu open failing-to-open --no-focus
+```
 
 ## Paths and shell use
 
