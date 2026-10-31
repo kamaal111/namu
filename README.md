@@ -139,6 +139,9 @@ Scripts, redirected commands, unsupported shells, and `--no-focus` never trigger
 automatic installation.
 
 After updating Namu, reload existing shell sessions to load the updated integration.
+Shell initialization loads both directory navigation and command, flag, and branch
+completion. Existing installations gain completion after updating Namu and
+reloading their shell; no additional startup entry or reinstallation is needed.
 Reload once with `exec zsh` or `exec bash`, as instructed after installation.
 The installing invocation cannot change its parent shell's directory. You can
 also install explicitly; these commands authorize the displayed file edits:
@@ -156,6 +159,21 @@ current shell:
 eval "$(namu shell-init zsh)"
 # Bash (~/.bashrc)
 eval "$(namu shell-init bash)"
+```
+
+Completion uses local and known remote branches without fetching. `open` suggests
+branches, `delete` suggests registered checkout branches, and `setup` suggests
+managed checkouts. `create --base` suggests branches and `create --remote`
+suggests remote names; the new branch name itself has no suggestions.
+
+For completion without directory navigation, load the standalone script instead:
+
+```sh
+# Zsh (initialize completion first if your shell does not already do so)
+autoload -Uz compinit; compinit -i
+source <(namu completion zsh)
+# Bash
+source <(namu completion bash)
 ```
 
 The wrapper prints the checkout path and changes directory after setup succeeds
