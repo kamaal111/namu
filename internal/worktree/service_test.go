@@ -3,6 +3,7 @@ package worktree
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -124,16 +125,13 @@ func TestDeleteRetainsBranchAndRefusesDirtyOrCurrent(t *testing.T) {
 	_, err = os.Stat(path)
 	ok(t, os.IsNotExist(err), "checkout must be removed")
 }
-func TestDeleteRejectsLockedExternalAndMain(t *testing.T) {
+func TestDeleteRejectsLockedAndMain(t *testing.T) {
 	s, _, _ := fixture(t)
 	ctx := context.Background()
 	must(t, s.Create(ctx, "feature/cards", "main", ""))
 	path := filepath.Join(s.Repo.Main, ".agents/worktrees/feature/cards")
 	run(t, s.Repo.Main, "worktree", "lock", path)
 	ok(t, s.Delete(ctx, "feature/cards") != nil, "locked checkout must remain")
-	external := filepath.Join(t.TempDir(), "external")
-	run(t, s.Repo.Main, "worktree", "add", "-b", "feature/external", external)
-	ok(t, s.Delete(ctx, "feature/external") != nil, "external checkout must remain")
 	ok(t, s.Delete(ctx, "main") != nil, "main checkout must remain")
 }
 func TestCreateRejectsSymlinkDestinationAndInvalidConfig(t *testing.T) {
@@ -270,4 +268,129 @@ func TestRemoteNamesContainingSlash(t *testing.T) {
 	must(t, s.Open(context.Background(), "team/origin/feature/search"))
 	ok(t, strings.HasSuffix(out.String(), "feature/search\n"), out.String())
 	ok(t, run(t, s.Repo.Main, "config", "branch.feature/search.remote") == "team/origin", "remote name must be preserved")
+}
+
+func TestDeleteExternalCheckoutRetainsBranch(t *testing.T) {
+	s, out, diagnostics := fixture(t)
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "external checkout")
+	run(t, s.Repo.Main, "worktree", "add", "-b", "feature/external", path)
+	path, err := filepath.EvalSymlinks(path)
+	must(t, err)
+	must(t, s.Delete(ctx, "feature/external"))
+	ok(t, out.Len() == 0, "delete must not print to stdout")
+	ok(t, diagnostics.String() == "Removed "+path+" (branch feature/external retained)\n", diagnostics.String())
+	_, err = os.Stat(path)
+	ok(t, os.IsNotExist(err), "checkout directory must be removed")
+	trees, err := git.Worktrees(ctx, s.Repo.Source)
+	must(t, err)
+	ok(t, len(trees) == 1, "linked registration must be removed")
+	ok(t, run(t, s.Repo.Source, "branch", "--list", "feature/external") != "", "branch must remain")
+}
+
+func TestDeleteExternalCheckoutProtections(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		prepare func(*testing.T, *Service, string)
+		want    string
+	}{
+		{"tracked changes", func(t *testing.T, s *Service, path string) {
+			write(t, filepath.Join(path, "tracked.txt"), "keep changes")
+		}, "contains modified or untracked files"},
+		{"untracked files", func(t *testing.T, s *Service, path string) {
+			write(t, filepath.Join(path, "untracked"), "keep changes")
+		}, "contains modified or untracked files"},
+		{"locked", func(t *testing.T, s *Service, path string) {
+			run(t, s.Repo.Source, "worktree", "lock", "--reason", "keep checkout", path)
+		}, "worktree is locked: keep checkout"},
+		{"prunable", func(t *testing.T, s *Service, path string) {
+			must(t, os.RemoveAll(path))
+		}, "worktree is prunable:"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, out, diagnostics := fixture(t)
+			path := filepath.Join(t.TempDir(), "external")
+			run(t, s.Repo.Source, "worktree", "add", "-b", "feature/external", path)
+			tc.prepare(t, s, path)
+			err := s.Delete(context.Background(), "feature/external")
+			ok(t, err != nil && strings.Contains(err.Error(), tc.want), fmt.Sprint(err))
+			ok(t, out.Len() == 0 && diagnostics.Len() == 0, "rejection must not print success")
+			trees, err := git.Worktrees(context.Background(), s.Repo.Source)
+			must(t, err)
+			ok(t, len(trees) == 2, "registration must remain")
+			ok(t, run(t, s.Repo.Source, "branch", "--list", "feature/external") != "", "branch must remain")
+		})
+	}
+}
+
+func TestDeleteExternalCheckoutPreservesDirtyContents(t *testing.T) {
+	s, _, _ := fixture(t)
+	path := filepath.Join(t.TempDir(), "external")
+	run(t, s.Repo.Source, "worktree", "add", "-b", "feature/external", path)
+	write(t, filepath.Join(path, "tracked.txt"), "tracked changes")
+	write(t, filepath.Join(path, "untracked"), "untracked changes")
+	ok(t, s.Delete(context.Background(), "feature/external") != nil, "dirty checkout must be rejected")
+	tracked, err := os.ReadFile(filepath.Join(path, "tracked.txt"))
+	must(t, err)
+	ok(t, string(tracked) == "tracked changes", "tracked changes must remain")
+	untracked, err := os.ReadFile(filepath.Join(path, "untracked"))
+	must(t, err)
+	ok(t, string(untracked) == "untracked changes", "untracked changes must remain")
+}
+
+func TestDeleteExternalInvokingCheckoutThroughSymlink(t *testing.T) {
+	s, _, _ := fixture(t)
+	path := filepath.Join(t.TempDir(), "external")
+	run(t, s.Repo.Source, "worktree", "add", "-b", "feature/external", path)
+	must(t, os.MkdirAll(filepath.Join(path, "subdir"), 0700))
+	alias := filepath.Join(t.TempDir(), "alias")
+	must(t, os.Symlink(path, alias))
+	repo, err := git.Discover(context.Background(), filepath.Join(alias, "subdir"))
+	must(t, err)
+	s.Repo = repo
+	err = s.Delete(context.Background(), "feature/external")
+	ok(t, err != nil && err.Error() == "cannot delete the invoking checkout", fmt.Sprint(err))
+	_, err = os.Stat(path)
+	must(t, err)
+}
+
+func TestDeleteMainFromLinkedCheckout(t *testing.T) {
+	s, _, _ := fixture(t)
+	path := filepath.Join(t.TempDir(), "external")
+	run(t, s.Repo.Source, "worktree", "add", "-b", "feature/external", path)
+	repo, err := git.Discover(context.Background(), path)
+	must(t, err)
+	s.Repo = repo
+	err = s.Delete(context.Background(), "main")
+	ok(t, err != nil && err.Error() == "cannot delete the main checkout", fmt.Sprint(err))
+	_, err = os.Stat(s.Repo.Main)
+	must(t, err)
+}
+
+func TestDeleteRejectsAmbiguousBranch(t *testing.T) {
+	s, _, diagnostics := fixture(t)
+	first := filepath.Join(t.TempDir(), "first")
+	second := filepath.Join(t.TempDir(), "second")
+	run(t, s.Repo.Source, "worktree", "add", "-b", "feature/shared", first)
+	run(t, s.Repo.Source, "worktree", "add", "--force", second, "feature/shared")
+	err := s.Delete(context.Background(), "feature/shared")
+	ok(t, err != nil && err.Error() == "multiple registered checkouts for feature/shared", fmt.Sprint(err))
+	trees, err := git.Worktrees(context.Background(), s.Repo.Source)
+	must(t, err)
+	ok(t, len(trees) == 3, "both registrations must remain")
+	for _, path := range []string{first, second} {
+		_, err := os.Stat(path)
+		must(t, err)
+	}
+	ok(t, diagnostics.Len() == 0, "must not report a removal")
+}
+
+func TestSetupRejectsExternalCheckout(t *testing.T) {
+	s, _, _ := fixture(t)
+	path := filepath.Join(t.TempDir(), "external")
+	run(t, s.Repo.Source, "worktree", "add", "-b", "feature/external", path)
+	err := s.Setup(context.Background(), "feature/external")
+	ok(t, err != nil && strings.Contains(err.Error(), "no matching registered managed checkout"), fmt.Sprint(err))
+	_, err = os.Stat(path)
+	must(t, err)
 }

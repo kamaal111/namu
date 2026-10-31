@@ -62,12 +62,14 @@ namu delete feature/pricing feature/release
   stdout can be redirected.
 - `list` shows every registered worktree, its branch, absolute path, commit, and
   detached/locked/prunable state. It does not fetch or prune anything.
-- `delete BRANCH [BRANCH...]` removes matching registered managed checkouts and
-  **retains their branches**. Each unique branch is attempted in argument order;
+- `delete BRANCH [BRANCH...]` removes matching registered linked checkouts at any
+  location, including checkouts created outside Namu, and **retains their branches**. Each unique branch is attempted in argument order;
   failures are reported together and make the command exit 1, while remaining
-  branches are still attempted. Dirty tracked files, untracked files, locks, external
-  checkouts, the main checkout, and the invoking checkout prevent removal. Ignored files are removed
-  with the checkout. Stop checkout-specific services yourself before deleting it.
+  branches are still attempted. Dirty tracked files, untracked files, locks,
+  prunable registrations, the main checkout, and the invoking checkout prevent
+  removal. Multiple registered checkouts using the same branch are rejected as
+  ambiguous. Ignored files are removed with the checkout. Stop checkout-specific
+  services yourself before deleting it.
 
 Bare repositories are unsupported. Create an initial commit before creating/opening
 branches. Git locks and conflicts are surfaced without force, branch deletion,

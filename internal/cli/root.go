@@ -117,7 +117,7 @@ func New(dir string) *cobra.Command {
 		}
 		return w.Flush()
 	}}
-	remove := &cobra.Command{Use: "delete BRANCH [BRANCH...]", Short: "Remove clean managed checkouts, retaining their branches", Args: cobra.MinimumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	remove := &cobra.Command{Use: "delete BRANCH [BRANCH...]", Short: "Remove clean registered checkouts, retaining their branches", Args: cobra.MinimumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		s, err := service(cmd, dir)
 		if err != nil {
 			return err

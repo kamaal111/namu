@@ -248,9 +248,37 @@ func (s *Service) managed(ctx context.Context, branch string) (string, error) {
 	return "", fmt.Errorf("no matching registered managed checkout for %s", branch)
 }
 func (s *Service) Delete(ctx context.Context, branch string) error {
-	path, err := s.managed(ctx, branch)
+	if err := git.ValidateBranch(ctx, s.Repo.Source, branch); err != nil {
+		return err
+	}
+	trees, err := git.Worktrees(ctx, s.Repo.Source)
 	if err != nil {
 		return err
+	}
+	var selected *git.Worktree
+	for _, tree := range trees {
+		if tree.Branch == branch {
+			if selected != nil {
+				return fmt.Errorf("multiple registered checkouts for %s", branch)
+			}
+			selected = &tree
+		}
+	}
+	if selected == nil {
+		return fmt.Errorf("no matching registered checkout for %s", branch)
+	}
+	if selected.Locked != "" {
+		return fmt.Errorf("worktree is locked: %s", selected.Locked)
+	}
+	if selected.Prunable != "" {
+		return fmt.Errorf("worktree is prunable: %s", selected.Prunable)
+	}
+	path, err := filepath.EvalSymlinks(selected.Path)
+	if err != nil {
+		return fmt.Errorf("registered checkout unavailable: %w", err)
+	}
+	if path == s.Repo.Main {
+		return fmt.Errorf("cannot delete the main checkout")
 	}
 	if s.Repo.Source == path || strings.HasPrefix(s.Repo.Source, path+string(filepath.Separator)) {
 		return fmt.Errorf("cannot delete the invoking checkout")
