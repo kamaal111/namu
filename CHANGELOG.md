@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/kamaal111/namu/compare/v0.4.1...v0.5.0) (2026-11-01)
+
+
+### Features
+
+* **cli:** add PR lookup opt-out flags ([c3e8080](https://github.com/kamaal111/namu/commit/c3e80800a7d206677661d19cb83b87a8dbce4862))
+
 ## [0.4.1](https://github.com/kamaal111/namu/compare/v0.4.0...v0.4.1) (2026-10-31)
 
 
