@@ -11,6 +11,10 @@ import (
 )
 
 type Config struct {
+	Defaults struct {
+		Focus *bool `toml:"focus"`
+		PR    *bool `toml:"pr"`
+	} `toml:"defaults"`
 	Setup struct {
 		Command []string `toml:"command"`
 	} `toml:"setup"`
