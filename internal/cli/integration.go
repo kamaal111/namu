@@ -30,6 +30,18 @@ func registerIntegrations(cmd *cobra.Command) {
 }
 
 func selectedIntegration(cmd *cobra.Command) (integration.Hooks, error) {
+	if vmEnabled(cmd) {
+		for _, definition := range integrations {
+			if cmd.Flags().Lookup(definition.flag) == nil {
+				continue
+			}
+			enabled, _ := cmd.Flags().GetBool(definition.flag)
+			if enabled && cmd.Flags().Changed(definition.flag) {
+				return integration.Hooks{}, fmt.Errorf("--vm cannot be combined with --%s", definition.flag)
+			}
+		}
+		return integration.Hooks{}, nil
+	}
 	var selected integration.Hooks
 	for _, definition := range integrations {
 		if cmd.Flags().Lookup(definition.flag) == nil {

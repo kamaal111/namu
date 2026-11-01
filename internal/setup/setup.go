@@ -17,7 +17,14 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// CommandRunner executes a setup argv in a selected environment without stdin.
+type CommandRunner func(context.Context, string, []string, io.Writer) error
+
 func Run(ctx context.Context, repo git.Repo, destination string, cfg config.Config, output io.Writer) error {
+	return RunWith(ctx, repo, destination, cfg, output, runLocal)
+}
+
+func RunWith(ctx context.Context, repo git.Repo, destination string, cfg config.Config, output io.Writer, run CommandRunner) error {
 	target, err := git.Discover(ctx, destination)
 	if err != nil {
 		return err
@@ -31,10 +38,12 @@ func Run(ctx context.Context, repo git.Repo, destination string, cfg config.Conf
 	if len(cfg.Setup.Command) == 0 {
 		return nil
 	}
-	command := exec.CommandContext(ctx, cfg.Setup.Command[0], cfg.Setup.Command[1:]...)
-	command.Dir = target.Source
-	command.Stdout = output
-	command.Stderr = output
+	return run(ctx, target.Source, cfg.Setup.Command, output)
+}
+func runLocal(ctx context.Context, destination string, argv []string, output io.Writer) error {
+	command := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	command.Dir = destination
+	command.Stdout, command.Stderr = output, output
 	if err := command.Run(); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -43,6 +52,7 @@ func Run(ctx context.Context, repo git.Repo, destination string, cfg config.Conf
 	}
 	return nil
 }
+
 func names(data []byte) map[string]bool {
 	out := map[string]bool{}
 	for _, name := range strings.Split(string(data), "\x00") {

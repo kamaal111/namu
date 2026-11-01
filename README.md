@@ -335,3 +335,97 @@ An explicit retry reruns copying and the hook. Hooks should therefore tolerate
 repeated execution. Opening an existing checkout does not copy or run setup again.
 Project-specific ports, environment rewriting, dependency installation, and services
 belong in the project hook; Namu does not implement them itself.
+
+## Optional VM worktrees
+
+Pass `--vm` to run setup and open a guest shell in a persistent Tart VM on an
+Apple Silicon Mac. Without this flag, all existing workflows behave as before.
+No separate `agent-vm` installation is needed.
+
+```sh
+namu create feature/cards --vm
+namu open feature/cards --vm
+namu open feature/cards --vm --os linux
+namu open feature/cards --vm --no-focus
+namu setup feature/cards --vm --vm-name namu-linux
+```
+
+The default is **macOS 27**, using the shared `namu-macos` VM. When that default
+has not been created, interactive first use offers macOS or Ubuntu 24.04 Linux
+before asking `[y/N]` to create it. `--os linux` selects the shared `namu-linux`
+VM directly. OS choices apply to that invocation; subsequent commands still
+require `--vm`, and selecting Linux does not change the macOS default.
+
+Creation requires confirmation, including any private Tart download, the pinned
+upstream image, dedicated SSH access, Git, and mounting prerequisites. Default
+resources are 4 CPUs, 8 GiB RAM, and an 80 GB macOS or 60 GB Linux disk. Downloads
+can be several GB. Linux guests require macOS 14+; macOS 27 guests require a
+macOS 27+ host. Compatible Apple Silicon hardware, system OpenSSH 10.3+ within
+major version 10, sufficient disk space/RAM, and network access are required.
+A compatible Tart 2.41.1+ within major version 2 is reused; otherwise approved
+setup downloads a checksum-verified private copy. Existing VM images are retained
+when embedded image defaults change.
+
+The guest shares the **main repository directory**, including its worktrees and
+Git metadata, read/write. External worktrees and external common Git directories
+are shared separately when needed. Every process in that VM can access these
+registered shares. Host and guest edits affect the same files immediately; there
+is no snapshot or export step. Host absolute paths are preserved inside the guest
+so linked-worktree Git references work without rewriting host metadata. Colons,
+commas, and newlines in share roots are unsupported. Conflicting guest mount paths
+are rejected rather than hiding existing guest files.
+
+Each OS's default VM is reused across worktrees and repositories. Sharing another
+worktree beneath an already shared main checkout needs no restart. Adding a new
+repository share to a running VM requires a restart, with a separate `[y/N]`
+confirmation warning that **all guest processes will stop**. Declining preserves
+the running VM and its existing shares. Use a separate named VM when needed:
+
+```sh
+namu vm create sandbox --os linux
+namu open feature/cards --vm --vm-name sandbox
+namu vm list
+namu vm shell sandbox
+namu vm stop sandbox
+namu vm start sandbox
+namu vm delete sandbox
+```
+
+Management commands work outside repositories. Named selection requires an
+existing namu-owned VM; unrelated Tart VMs are never adopted automatically.
+Deletion requires a stopped VM and confirmation, destroys guest files and installed
+tools, and retains host repositories. Removing a worktree with `namu delete`
+does not delete or stop its shared VM. Stop guest services before removing a
+worktree. Do not rename, replace, or delete owned VMs behind namu's registry.
+
+With `--vm`, included ignored files are copied on the host, then `.namu.toml`'s
+setup argv runs **inside the guest** with no stdin. The guest environment is used;
+host credentials and environment variables are not forwarded. Install project
+prerequisites through that hook or `namu vm shell`. Agent tools are not installed
+automatically. Opening an existing checkout does not rerun setup; use an explicit
+`namu setup BRANCH --vm --vm-name NAME` retry from the source checkout. Omitting
+`--vm` from that retry runs setup on the host.
+
+VM mode opens SSH in the current terminal and bypasses automatic Rex/Herdr
+detection. Explicitly combining `--vm` with `--rex` or `--herdr` is rejected.
+The parent shell never changes directory. Stdout remains the single host checkout
+path; guest shell output, setup diagnostics, and prompts use stderr, including
+when the shell wrapper captures stdout. `--no-focus` prepares and verifies the
+VM worktree without attaching. Noninteractive use requires `--no-focus` for
+create/open and an already prepared VM; creation, restart, and deletion still
+require interactive confirmation. There is no `--yes` bypass.
+
+Failures never fall back to host execution. Created worktrees and owned VMs are
+preserved for inspection and retry. Partial VM setup can be retried with
+`namu vm start NAME`; `namu vm list` reports incomplete stages or missing disks.
+A missing previously completed VM is not silently replaced. Restore missing
+registered share directories before starting a stopped VM. Persistent VM registry,
+SSH identity, trust, and logs live under `~/.local/share/namu/vm/`, separate from
+agent-vm state. No project configuration enables VM mode automatically.
+
+For contributor checks, `just vm-prerequisites` inspects host tooling. Opt-in live
+verification uses `just vm-smoke NAME` against a prepared, stopped namu VM. It
+creates a temporary repository, verifies guest setup, shared files and Git commits,
+checks interactive Bash/Zsh guest shells, then stops the VM and restores its
+previous share registration. Normal tests never
+boot VMs or download images.
