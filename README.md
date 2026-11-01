@@ -262,6 +262,33 @@ Successful commands and Escape cancellation exit 0; errors exit 1; Ctrl+C exits 
 Escape cancellation prints no path. Repository paths containing newlines can be
 listed, but newline-terminated path output is intended for ordinary checkout paths.
 
+## Project defaults
+
+Add `.namu.toml` at the root of the checkout from which you invoke Namu:
+
+```toml
+[defaults]
+focus = false
+pr = false
+
+[setup]
+command = ["just", "setup-worktree"]
+```
+
+`defaults.focus` controls workspace focus and shell navigation for `create` and
+`open`. Setting it to `false` also skips automatic shell-install prompting.
+Explicit `--focus` or `--no-focus=false` enables focus for an invocation;
+`--no-focus` or `--focus=false` disables it. Without this setting, focus is enabled.
+When multiple focus flags are supplied, the last one wins.
+`defaults.pr = false` skips GitHub lookup and hides the PR column in `list`.
+Explicit `--pr` or `--no-pr=false` enables lookup; `--no-pr` or `--pr=false`
+disables it. Without this setting, PR lookup is enabled. The last supplied PR
+flag wins. Invalid configuration fails before lookup or navigation.
+
+Namu reads the invoking checkout's root configuration even from a subdirectory
+or linked worktree. Rex and Herdr selection still uses flags and terminal detection;
+base and remote selection still uses flags. These settings cannot be configured.
+
 ## Optional project setup
 
 Add `.namu.toml` to the checkout from which you invoke Namu:

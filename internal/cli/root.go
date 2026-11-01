@@ -40,12 +40,6 @@ func New(dir string) *cobra.Command {
 	root := &cobra.Command{Use: "namu", Short: "Create, open, list and delete Git worktrees", Version: version(), Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true}
 	var base, remote string
 	create := &cobra.Command{Use: "create BRANCH", Short: "Create a new branch and worktree, then print its path", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		if cmd.Flags().Changed("base") && base == "" {
-			return fmt.Errorf("--base cannot be empty")
-		}
-		if cmd.Flags().Changed("remote") && remote == "" {
-			return fmt.Errorf("--remote cannot be empty")
-		}
 		s, err := service(cmd, dir)
 		if err != nil {
 			return err
@@ -59,9 +53,6 @@ func New(dir string) *cobra.Command {
 	_ = create.RegisterFlagCompletionFunc("base", completeRepository(dir, "base"))
 	_ = create.RegisterFlagCompletionFunc("remote", completeRepository(dir, "remote"))
 	open := &cobra.Command{Use: "open [BRANCH]", Short: "Create or reuse a branch checkout and print its path", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		if len(args) == 0 && !interactive(cmd) {
-			return fmt.Errorf("interactive terminal required; supply a branch: namu open feature/cards")
-		}
 		s, err := service(cmd, dir)
 		if err != nil {
 			return err
@@ -150,6 +141,9 @@ func New(dir string) *cobra.Command {
 		}
 		return w.Flush()
 	}}
+	list.PreRunE = func(cmd *cobra.Command, _ []string) error {
+		return applyProjectDefaults(cmd, dir)
+	}
 	registerBoolPair(list, "pr", true, "Look up GitHub PR numbers", "Skip GitHub PR lookup and hide the PR column")
 	remove := &cobra.Command{Use: "delete BRANCH [BRANCH...]", Short: "Remove clean registered checkouts, retaining their branches", Args: cobra.MinimumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		s, err := service(cmd, dir)
@@ -180,7 +174,9 @@ func New(dir string) *cobra.Command {
 		return s.Setup(cmd.Context(), args[0])
 	}}
 	for _, cmd := range []*cobra.Command{create, open} {
-		cmd.PreRunE = autoShellInstall
+		cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
+			return prepareNavigation(cmd, dir, args)
+		}
 		registerIntegrations(cmd)
 		registerBoolPair(cmd, "focus", true, "Focus the workspace and change directory with shell integration", "Keep current workspace and shell directory")
 	}

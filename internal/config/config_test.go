@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -43,4 +45,55 @@ func TestRejectSymlinkConfig(t *testing.T) {
 	must(t, os.Symlink("target", filepath.Join(dir, ".namu.toml")))
 	_, err := Load(dir)
 	check(t, err != nil, "symlink config must fail")
+}
+
+func TestLoadFocusDefaults(t *testing.T) {
+	for _, tc := range []struct {
+		name, content string
+		want          *bool
+	}{
+		{"absent", "", nil},
+		{"enabled", "[defaults]\nfocus = true\n", boolPointer(true)},
+		{"disabled-with-setup", "[defaults]\nfocus = false\n[setup]\ncommand = ['true']\n", boolPointer(false)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			must(t, os.WriteFile(filepath.Join(dir, ".namu.toml"), []byte(tc.content), 0600))
+			c, err := Load(dir)
+			must(t, err)
+			check(t, reflect.DeepEqual(c.Defaults.Focus, tc.want), "unexpected focus default")
+		})
+	}
+}
+
+func boolPointer(value bool) *bool { return &value }
+
+func TestRejectInvalidDefaults(t *testing.T) {
+	for _, content := range []string{
+		"[defaults]\nfocus = 'false'\n",
+		"[defaults]\npr = 'false'\n",
+		"[defaults]\nrex = false\n",
+		"[defaults]\nherdr = true\n",
+		"[defaults]\nfocus =",
+	} {
+		t.Run(content, func(t *testing.T) {
+			dir := t.TempDir()
+			must(t, os.WriteFile(filepath.Join(dir, ".namu.toml"), []byte(content), 0600))
+			_, err := Load(dir)
+			check(t, err != nil, "invalid defaults must fail")
+		})
+	}
+}
+
+func TestLoadPRDefaults(t *testing.T) {
+	for _, enabled := range []bool{true, false} {
+		t.Run(strconv.FormatBool(enabled), func(t *testing.T) {
+			dir := t.TempDir()
+			must(t, os.WriteFile(filepath.Join(dir, ".namu.toml"), []byte("[defaults]\npr = "+strconv.FormatBool(enabled)+"\nfocus = false\n"), 0600))
+			c, err := Load(dir)
+			must(t, err)
+			check(t, reflect.DeepEqual(c.Defaults.PR, &enabled), "unexpected PR default")
+			check(t, reflect.DeepEqual(c.Defaults.Focus, boolPointer(false)), "focus default changed")
+		})
+	}
 }

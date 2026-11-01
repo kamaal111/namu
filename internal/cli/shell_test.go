@@ -190,10 +190,10 @@ func TestInstalledShellIntegrationNavigates(t *testing.T) {
 func TestAutomaticShellInstallInTerminal(t *testing.T) {
 	binaryDir := buildShellCLI(t)
 	for _, tc := range []struct {
-		name, shell, answer, marker, herdr, rex string
-		args                                    []string
-		redirected, prompt, installed           bool
-		code                                    int
+		name, shell, answer, marker, herdr, rex, config string
+		args                                            []string
+		redirected, prompt, installed                   bool
+		code                                            int
 	}{
 		{name: "accept", shell: "zsh", answer: "yes\n", args: []string{"open", "feature/cards"}, prompt: true, installed: true},
 		{name: "accept-bash", shell: "bash", answer: "yes\n", args: []string{"create", "feature/new", "--base", "main"}, prompt: true, installed: true},
@@ -211,6 +211,9 @@ func TestAutomaticShellInstallInTerminal(t *testing.T) {
 		{name: "create-focus-last", shell: "zsh", answer: "no\n", args: []string{"create", "feature/new", "--base", "main", "--no-focus", "--focus"}, prompt: true},
 		{name: "create-no-focus-last", shell: "zsh", args: []string{"create", "feature/new", "--base", "main", "--focus", "--no-focus"}},
 		{name: "create-negative-false-last", shell: "zsh", answer: "no\n", args: []string{"create", "feature/new", "--base", "main", "--focus=false", "--no-focus=false"}, prompt: true},
+		{name: "configured-no-focus", shell: "zsh", config: "[defaults]\nfocus = false\n", args: []string{"open", "feature/cards"}},
+		{name: "override-configured-no-focus", shell: "zsh", config: "[defaults]\nfocus = false\n", answer: "no\n", args: []string{"open", "feature/cards", "--no-focus=false"}, prompt: true},
+		{name: "invalid-config", shell: "zsh", config: "[defaults]\nfocus = 'false'\n", args: []string{"open", "feature/cards"}, code: 1},
 		{name: "redirected", shell: "zsh", args: []string{"open", "feature/cards"}, redirected: true},
 		{name: "unsupported", shell: "fish", args: []string{"open", "feature/cards"}},
 		{name: "help", shell: "zsh", args: []string{"open", "--help"}},
@@ -218,6 +221,7 @@ func TestAutomaticShellInstallInTerminal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			home := shellHome(t)
 			repo := testutil.Repository(t)
+			testutil.Write(t, filepath.Join(repo.Source, ".namu.toml"), tc.config)
 			testutil.Git(t, repo.Source, "branch", "feature/cards")
 			t.Setenv("SHELL", "/bin/"+tc.shell)
 			t.Setenv("TERM", "xterm-256color")
