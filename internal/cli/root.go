@@ -34,6 +34,9 @@ func service(cmd *cobra.Command, dir string) (*worktree.Service, error) {
 		focus, _ := cmd.Flags().GetBool("focus")
 		s.NoFocus = !focus
 	}
+	if err := configureVM(cmd, s); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 func New(dir string) *cobra.Command {
@@ -180,11 +183,14 @@ func New(dir string) *cobra.Command {
 		registerIntegrations(cmd)
 		registerBoolPair(cmd, "focus", true, "Focus the workspace and change directory with shell integration", "Keep current workspace and shell directory")
 	}
+	for _, cmd := range []*cobra.Command{create, open, setup} {
+		registerVM(cmd)
+	}
 	open.ValidArgsFunction = completeRepository(dir, "open")
 	remove.ValidArgsFunction = completeRepository(dir, "delete")
 	setup.ValidArgsFunction = completeRepository(dir, "setup")
 	list.ValidArgsFunction = cobra.NoFileCompletions
-	root.AddCommand(create, open, list, remove, setup, shellInit())
+	root.AddCommand(create, open, list, remove, setup, shellInit(), vmCommand())
 	return root
 }
 func interactive(cmd *cobra.Command) bool {

@@ -205,13 +205,18 @@ func offerShellInstall(ctx context.Context, shell string, out io.Writer, confirm
 }
 
 func confirmShellInstall(ctx context.Context, input io.Reader, out io.Writer) (bool, error) {
-	if _, err := fmt.Fprint(out, "Install shell integration with these changes? [y/N] "); err != nil {
-		return false, err
+	answer, err := readTerminalLine(ctx, input, out, "Install shell integration with these changes? [y/N] ")
+	return strings.EqualFold(answer, "y") || strings.EqualFold(answer, "yes"), err
+}
+
+func readTerminalLine(ctx context.Context, input io.Reader, out io.Writer, prompt string) (string, error) {
+	if _, err := fmt.Fprint(out, prompt); err != nil {
+		return "", err
 	}
 	var answer strings.Builder
 	for {
 		if err := ctx.Err(); err != nil {
-			return false, err
+			return "", err
 		}
 		if file, ok := input.(*os.File); ok {
 			fds := []unix.PollFd{{Fd: int32(file.Fd()), Events: unix.POLLIN}}
@@ -220,7 +225,7 @@ func confirmShellInstall(ctx context.Context, input io.Reader, out io.Writer) (b
 				continue
 			}
 			if err != nil {
-				return false, err
+				return "", err
 			}
 			if n == 0 {
 				continue
@@ -230,25 +235,32 @@ func confirmShellInstall(ctx context.Context, input io.Reader, out io.Writer) (b
 		n, err := input.Read(b[:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				return false, nil
+				return "", nil
 			}
-			return false, err
+			return "", err
 		}
 		if n == 0 {
 			continue
 		}
 		if b[0] == '\n' {
 			response := strings.TrimSpace(answer.String())
-			return strings.EqualFold(response, "y") || strings.EqualFold(response, "yes"), ctx.Err()
+			return response, ctx.Err()
 		}
 		if answer.Len() >= 1024 {
-			return false, nil
+			return "", nil
 		}
 		answer.WriteByte(b[0])
 	}
 }
 
 func autoShellInstall(cmd *cobra.Command, _ []string) error {
+	if err := validateVMOptions(cmd); err != nil {
+		return err
+	}
+	if vmEnabled(cmd) {
+		_, err := selectedIntegration(cmd)
+		return err
+	}
 	selected, err := selectedIntegration(cmd)
 	if err != nil {
 		return err

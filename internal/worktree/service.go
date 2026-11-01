@@ -14,11 +14,11 @@ import (
 	git "github.com/kamaal111/namu/internal/git"
 	"github.com/kamaal111/namu/internal/integration"
 	"github.com/kamaal111/namu/internal/pathdisplay"
-	"github.com/kamaal111/namu/internal/setup"
 )
 
 type Service struct {
 	Repo        git.Repo
+	Environment Environment
 	Integration integration.Hooks
 	Fallback    integration.Hooks
 	NoFocus     bool
@@ -78,8 +78,12 @@ func (s *Service) afterCreate(ctx context.Context, branch, path string, cfg conf
 	if err := s.printPath(path); err != nil {
 		return fmt.Errorf("checkout preserved at %s; cannot print path: %w", pathdisplay.Shorten(path), err)
 	}
-	if err := setup.Run(ctx, s.Repo, path, cfg, s.Err); err != nil {
-		return fmt.Errorf("setup failed; checkout preserved at %s; retry from %s: namu setup %s: %w", pathdisplay.Shorten(path), pathdisplay.Shorten(s.Repo.Source), shellArgument(branch), err)
+	if err := s.runSetup(ctx, path, cfg); err != nil {
+		flags := ""
+		if s.Environment != nil {
+			flags = s.Environment.RetryFlags()
+		}
+		return fmt.Errorf("setup failed; checkout preserved at %s; retry from %s: namu setup %s%s: %w", pathdisplay.Shorten(path), pathdisplay.Shorten(s.Repo.Source), shellArgument(branch), flags, err)
 	}
 	return nil
 }
@@ -105,6 +109,9 @@ func (s *Service) createAt(ctx context.Context, request git.WorktreeRequest, rev
 	if _, err := s.path(ctx, branch); err != nil {
 		return err
 	}
+	if err := s.prepareEnvironment(ctx, path); err != nil {
+		return err
+	}
 	if err := s.ensureExcluded(); err != nil {
 		return err
 	}
@@ -128,6 +135,9 @@ func (s *Service) createAt(ctx context.Context, request git.WorktreeRequest, rev
 	}
 	if err := s.afterCreate(ctx, branch, path, cfg); err != nil {
 		return err
+	}
+	if s.Environment != nil {
+		return s.openEnvironment(ctx, path)
 	}
 	input := s.openRequest(path, branch)
 	if outcome.Recovered {
@@ -214,6 +224,15 @@ func (s *Service) Open(ctx context.Context, label string) error {
 			path, err := filepath.EvalSymlinks(w.Path)
 			if err != nil {
 				return fmt.Errorf("registered checkout unavailable: %w", err)
+			}
+			if s.Environment != nil {
+				if err := s.prepareEnvironment(ctx, path); err != nil {
+					return err
+				}
+				if err := s.printPath(path); err != nil {
+					return err
+				}
+				return s.openEnvironment(ctx, path)
 			}
 			if err := s.openIntegrated(ctx, s.openRequest(path, selected.Name)); err != nil {
 				return err
@@ -315,7 +334,10 @@ func (s *Service) Setup(ctx context.Context, branch string) error {
 	if err != nil {
 		return err
 	}
-	return setup.Run(ctx, s.Repo, path, cfg, s.Err)
+	if err := s.prepareEnvironment(ctx, path); err != nil {
+		return err
+	}
+	return s.runSetup(ctx, path, cfg)
 }
 
 // shellArgument keeps the printed retry command safe to paste into a POSIX shell.
