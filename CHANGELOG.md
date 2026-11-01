@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/kamaal111/namu/compare/v0.5.0...v0.6.0) (2026-11-01)
+
+
+### Features
+
+* **config:** add project focus and PR lookup defaults ([fbe9413](https://github.com/kamaal111/namu/commit/fbe941310205c6a612fd0c9f44403a6adb5bfd53))
+
 ## [0.5.0](https://github.com/kamaal111/namu/compare/v0.4.1...v0.5.0) (2026-11-01)
 
 
