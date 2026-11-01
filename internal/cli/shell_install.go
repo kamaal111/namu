@@ -257,8 +257,7 @@ func autoShellInstall(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 	focus, _ := cmd.Flags().GetBool("focus")
-	noFocus, _ := cmd.Flags().GetBool("no-focus")
-	if !focus || noFocus || os.Getenv("NAMU_SHELL_INTEGRATION") == "1" || !interactive(cmd) || !terminalStream(cmd.OutOrStdout()) {
+	if !focus || os.Getenv("NAMU_SHELL_INTEGRATION") == "1" || !interactive(cmd) || !terminalStream(cmd.OutOrStdout()) {
 		return nil
 	}
 	shell := filepath.Base(os.Getenv("SHELL"))

@@ -23,6 +23,8 @@ func TestHerdrSelectionAndFocusFlags(t *testing.T) {
 		{"no-focus", "1", []string{"--no-focus"}, true, false},
 		{"focus-false", "1", []string{"--focus=false"}, true, false},
 		{"no-focus-false", "1", []string{"--no-focus=false"}, true, true},
+		{"focus-last", "1", []string{"--no-focus", "--focus"}, true, true},
+		{"no-focus-last", "1", []string{"--focus", "--no-focus"}, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := testutil.Repository(t)
@@ -39,12 +41,35 @@ func TestHerdrSelectionAndFocusFlags(t *testing.T) {
 	}
 }
 
-func TestFocusFlagsAreMutuallyExclusive(t *testing.T) {
+func TestFocusFlagsLastWins(t *testing.T) {
 	for _, action := range []string{"create", "open"} {
-		t.Run(action, func(t *testing.T) {
-			out, _, err := execute(t, t.TempDir(), action, "feature/cards", "--focus", "--no-focus")
-			check(t, err != nil, "conflicting flags must fail")
-			check(t, out == "", "must not print path")
-		})
+		for _, tc := range []struct {
+			name  string
+			flags []string
+			focus bool
+		}{
+			{"focus-last", []string{"--no-focus", "--focus"}, true},
+			{"no-focus-last", []string{"--focus", "--no-focus"}, false},
+			{"negative-false-last", []string{"--focus=false", "--no-focus=false"}, true},
+			{"positive-false-last", []string{"--no-focus=false", "--focus=false"}, false},
+			{"repeated-positive", []string{"--focus=false", "--focus"}, true},
+			{"repeated-negative", []string{"--no-focus", "--no-focus=false"}, true},
+		} {
+			t.Run(action+"/"+tc.name, func(t *testing.T) {
+				repo := testutil.Repository(t)
+				testutil.Git(t, repo.Source, "branch", "feature/cards")
+				root := New(repo.Source)
+				cmd, _, err := root.Find([]string{action})
+				must(t, err)
+				cmd.SetContext(t.Context())
+				must(t, cmd.ParseFlags(tc.flags))
+				s, err := service(cmd, repo.Source)
+				must(t, err)
+				check(t, s.NoFocus == !tc.focus, "incorrect effective focus")
+				focus, err := cmd.Flags().GetBool("focus")
+				must(t, err)
+				check(t, focus == tc.focus, "positive flag must expose effective focus")
+			})
+		}
 	}
 }

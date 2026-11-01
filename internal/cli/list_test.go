@@ -86,3 +86,52 @@ exit 1`, "BRANCH\tPATH\tPR\tHEAD\tNOTES\n", "\t", "#42\t"},
 		})
 	}
 }
+
+func TestListPRFlags(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		flags   []string
+		enabled bool
+	}{
+		{"default", nil, true},
+		{"positive", []string{"--pr"}, true},
+		{"negative", []string{"--no-pr"}, false},
+		{"positive-false", []string{"--pr=false"}, false},
+		{"negative-false", []string{"--no-pr=false"}, true},
+		{"positive-last", []string{"--no-pr", "--pr"}, true},
+		{"negative-last", []string{"--pr", "--no-pr"}, false},
+		{"false-negative-last", []string{"--pr=false", "--no-pr=false"}, true},
+		{"false-positive-last", []string{"--no-pr=false", "--pr=false"}, false},
+		{"repeated-positive", []string{"--pr=false", "--pr"}, true},
+		{"repeated-negative", []string{"--no-pr", "--no-pr=false"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			log := testutil.GitHub(t, githubReady+`echo '{"data":{"repository":{"open0":{"nodes":[{"number":42}]}}}}'`)
+			repo := testutil.Repository(t)
+			before := testutil.Git(t, repo.Source, "worktree", "list", "--porcelain")
+			out, diagnostics, err := execute(t, repo.Source, append([]string{"list"}, tc.flags...)...)
+			must(t, err)
+			calls, _ := os.ReadFile(log)
+			check(t, (len(calls) > 0) == tc.enabled, string(calls))
+			check(t, strings.Contains(out, "#42") == tc.enabled, out)
+			header := strings.Join(strings.Fields(strings.Split(out, "\n")[0]), " ")
+			check(t, header == map[bool]string{true: "BRANCH PATH PR HEAD NOTES", false: "BRANCH PATH HEAD NOTES"}[tc.enabled], out)
+			check(t, strings.Contains(out, "main"), out)
+			check(t, diagnostics == "", diagnostics)
+			check(t, testutil.Git(t, repo.Source, "worktree", "list", "--porcelain") == before, "list must preserve worktrees")
+		})
+	}
+}
+
+func TestListPRFlagsRejectInvalidBoolean(t *testing.T) {
+	for _, flag := range []string{"--pr=invalid", "--no-pr=invalid"} {
+		t.Run(flag, func(t *testing.T) {
+			log := testutil.GitHub(t, "exit 1")
+			out, _, err := execute(t, t.TempDir(), "list", flag)
+			check(t, err != nil && strings.Contains(err.Error(), "invalid"), "must reject invalid boolean")
+			check(t, out == "", out)
+			calls, _ := os.ReadFile(log)
+			check(t, len(calls) == 0, string(calls))
+		})
+	}
+}
