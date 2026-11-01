@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/kamaal111/namu/internal/pathdisplay"
+	"github.com/kamaal111/namu/internal/vm/platform/registry"
+	"github.com/kamaal111/namu/internal/vm/resources"
+	"github.com/kamaal111/namu/internal/vm/state"
 	"github.com/pelletier/go-toml/v2"
 	"os"
 	"path/filepath"
@@ -11,9 +14,16 @@ import (
 )
 
 type Config struct {
+	VM struct {
+		OS   string `toml:"os"`
+		Name string `toml:"name"`
+		resources.Options
+	} `toml:"vm"`
 	Defaults struct {
-		Focus *bool `toml:"focus"`
-		PR    *bool `toml:"pr"`
+		Focus            *bool `toml:"focus"`
+		VM               *bool `toml:"vm"`
+		ReuseCredentials *bool `toml:"reuse_credentials"`
+		PR               *bool `toml:"pr"`
 	} `toml:"defaults"`
 	Setup struct {
 		Command []string `toml:"command"`
@@ -44,6 +54,19 @@ func Load(source string) (Config, error) {
 	defer f.Close()
 	if err := toml.NewDecoder(f).DisallowUnknownFields().Decode(&c); err != nil {
 		return c, fmt.Errorf("read .namu.toml: %w", err)
+	}
+	if err := c.VM.Options.Validate(); err != nil {
+		return c, err
+	}
+	if c.VM.OS != "" {
+		if _, err := registry.Resolve(c.VM.OS); err != nil {
+			return c, fmt.Errorf("vm.os: %w", err)
+		}
+	}
+	if c.VM.Name != "" {
+		if err := state.ValidateName(c.VM.Name); err != nil {
+			return c, err
+		}
 	}
 	if len(c.Setup.Command) > 0 && strings.TrimSpace(c.Setup.Command[0]) == "" {
 		return c, fmt.Errorf("setup.command must begin with an executable")

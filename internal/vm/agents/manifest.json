@@ -1,0 +1,9 @@
+{
+  "cursor_sha256": {
+    "linux": "22a36df9720830668ccd4d707e5190204ab9c8a0efb2f068cc914895f804d3ec",
+    "macos": "2f5b0a3dd5fb951cecffac813867d8a08d810e59837d59fd5f12d69b922398d7"
+  },
+  "agents": {
+    "cursor": "2026.10.22-27dcf5f"
+  }
+}

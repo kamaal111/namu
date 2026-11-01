@@ -1,0 +1,2 @@
+#!/bin/sh
+NAMU_AGENT_REVISION=@REVISION@

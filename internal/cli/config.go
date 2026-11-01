@@ -43,23 +43,49 @@ func applyProjectDefaults(cmd *cobra.Command, dir string) error {
 		return err
 	}
 	for _, setting := range []struct {
-		name  string
-		value *bool
+		name     string
+		value    *bool
+		fallback bool
 	}{
-		{"focus", cfg.Defaults.Focus},
-		{"pr", cfg.Defaults.PR},
+		{"focus", cfg.Defaults.Focus, true},
+		{"pr", cfg.Defaults.PR, true},
+		{"vm", cfg.Defaults.VM, false},
+		{"reuse-credentials", cfg.Defaults.ReuseCredentials, true},
 	} {
 		flag := cmd.Flags().Lookup(setting.name)
 		if flag == nil || cmd.Flags().Changed(setting.name) || cmd.Flags().Changed("no-"+setting.name) {
 			continue
 		}
-		enabled := true
+		enabled := setting.fallback
 		if setting.value != nil {
 			enabled = *setting.value
 		}
 		// Keep project defaults separate from explicitly supplied CLI flags.
 		if err := flag.Value.Set(strconv.FormatBool(enabled)); err != nil {
 			return err
+		}
+	}
+	for _, setting := range []struct{ name, value string }{
+		{"os", cfg.VM.OS}, {"vm-name", cfg.VM.Name},
+	} {
+		flag := cmd.Flags().Lookup(setting.name)
+		if flag != nil && !flag.Changed && setting.value != "" {
+			if err := flag.Value.Set(setting.value); err != nil {
+				return err
+			}
+		}
+	}
+	for _, setting := range []struct {
+		name  string
+		value *int
+	}{
+		{"vm-cpus", cfg.VM.CPUs}, {"vm-memory", cfg.VM.MemoryMB}, {"vm-disk", cfg.VM.DiskGB},
+	} {
+		flag := cmd.Flags().Lookup(setting.name)
+		if flag != nil && !flag.Changed && setting.value != nil {
+			if err := flag.Value.Set(strconv.Itoa(*setting.value)); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

@@ -97,3 +97,49 @@ func TestLoadPRDefaults(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadVMAndCredentialDefaults(t *testing.T) {
+	dir := t.TempDir()
+	must(t, os.WriteFile(filepath.Join(dir, ".namu.toml"), []byte("[defaults]\nvm = true\nreuse_credentials = false\n"), 0600))
+	cfg, err := Load(dir)
+	must(t, err)
+	check(t, reflect.DeepEqual(cfg.Defaults.VM, boolPointer(true)), "must load VM default")
+	check(t, reflect.DeepEqual(cfg.Defaults.ReuseCredentials, boolPointer(false)), "must load credential default")
+}
+func TestMissingVMDefaultRemainsUnspecified(t *testing.T) {
+	cfg, err := Load(t.TempDir())
+	must(t, err)
+	check(t, cfg.Defaults.VM == nil && cfg.Defaults.ReuseCredentials == nil, "must preserve built-in defaults")
+}
+func TestRejectInvalidVMAndCredentialDefaults(t *testing.T) {
+	for _, content := range []string{"[defaults]\nvm = 'true'\n", "[defaults]\nreuse_credentials = 'false'\n"} {
+		t.Run(content, func(t *testing.T) {
+			dir := t.TempDir()
+			must(t, os.WriteFile(filepath.Join(dir, ".namu.toml"), []byte(content), 0600))
+			_, err := Load(dir)
+			check(t, err != nil, "must reject non-boolean defaults")
+		})
+	}
+}
+
+func TestLoadVMSettings(t *testing.T) {
+	dir := t.TempDir()
+	must(t, os.WriteFile(filepath.Join(dir, ".namu.toml"), []byte("[vm]\nos = 'linux'\nname = 'sandbox'\ncpus = 2\nmemory_mb = 4096\ndisk_gb = 90\n"), 0600))
+	cfg, err := Load(dir)
+	must(t, err)
+	check(t, cfg.VM.OS == "linux" && cfg.VM.Name == "sandbox", "VM selection must load")
+	check(t, reflect.DeepEqual(cfg.VM.CPUs, new(2)), "CPU count must load")
+	check(t, reflect.DeepEqual(cfg.VM.MemoryMB, new(4096)), "memory must load")
+	check(t, reflect.DeepEqual(cfg.VM.DiskGB, new(90)), "disk must load")
+}
+
+func TestRejectInvalidVMSettings(t *testing.T) {
+	for _, field := range []string{"cpus = 0", "memory_mb = -1", "disk_gb = 65536", "cpus = '2'", "os = 'windows'", "name = '../unsafe'", "memory = 4096"} {
+		t.Run(field, func(t *testing.T) {
+			dir := t.TempDir()
+			must(t, os.WriteFile(filepath.Join(dir, ".namu.toml"), []byte("[vm]\n"+field+"\n"), 0600))
+			_, err := Load(dir)
+			check(t, err != nil, "invalid VM setting must fail")
+		})
+	}
+}
