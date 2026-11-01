@@ -39,3 +39,11 @@ vet:
 # Validate project shell scripts
 check-shells:
     sh scripts/check-shells.sh
+
+# Validate sharing and guest Git against an already prepared namu VM
+vm-smoke name:
+    NAMU_VM_SMOKE={{ quote(name) }} go test ./internal/vm -run '^TestLiveVMWorktree$' -v
+
+# Download and verify pinned vendor sources for credential compatibility inspection
+vm-agent-sources:
+    python3 scripts/vm-agent-sources.py

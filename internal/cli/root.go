@@ -34,16 +34,20 @@ func service(cmd *cobra.Command, dir string) (*worktree.Service, error) {
 		focus, _ := cmd.Flags().GetBool("focus")
 		s.NoFocus = !focus
 	}
+	if err := configureVM(cmd, s); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 func New(dir string) *cobra.Command {
 	root := &cobra.Command{Use: "namu", Short: "Create, open, list and delete Git worktrees", Version: version(), Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true}
 	var base, remote string
-	create := &cobra.Command{Use: "create BRANCH", Short: "Create a new branch and worktree, then print its path", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	create := &cobra.Command{Use: "create BRANCH", Short: "Create a new branch and worktree, then print its path", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) (result error) {
 		s, err := service(cmd, dir)
 		if err != nil {
 			return err
 		}
+		defer func() { result = errors.Join(result, s.Close()) }()
 		return s.Create(cmd.Context(), args[0], base, remote)
 	}}
 	create.Flags().StringVar(&base, "base", "", "Exact local base ref; skips fetching")
@@ -52,11 +56,12 @@ func New(dir string) *cobra.Command {
 	create.ValidArgsFunction = cobra.NoFileCompletions
 	_ = create.RegisterFlagCompletionFunc("base", completeRepository(dir, "base"))
 	_ = create.RegisterFlagCompletionFunc("remote", completeRepository(dir, "remote"))
-	open := &cobra.Command{Use: "open [BRANCH]", Short: "Create or reuse a branch checkout and print its path", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	open := &cobra.Command{Use: "open [BRANCH]", Short: "Create or reuse a branch checkout and print its path", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) (result error) {
 		s, err := service(cmd, dir)
 		if err != nil {
 			return err
 		}
+		defer func() { result = errors.Join(result, s.Close()) }()
 		if len(args) == 1 {
 			return s.Open(cmd.Context(), args[0])
 		}
@@ -166,13 +171,15 @@ func New(dir string) *cobra.Command {
 		}
 		return errors.Join(failures...)
 	}}
-	setup := &cobra.Command{Use: "setup BRANCH", Short: "Retry copying and setup from the original source checkout", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	setup := &cobra.Command{Use: "setup BRANCH", Short: "Retry copying and setup from the original source checkout", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) (result error) {
 		s, err := service(cmd, dir)
 		if err != nil {
 			return err
 		}
+		defer func() { result = errors.Join(result, s.Close()) }()
 		return s.Setup(cmd.Context(), args[0])
 	}}
+	setup.PreRunE = func(cmd *cobra.Command, _ []string) error { return applyProjectDefaults(cmd, dir) }
 	for _, cmd := range []*cobra.Command{create, open} {
 		cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
 			return prepareNavigation(cmd, dir, args)
@@ -180,11 +187,14 @@ func New(dir string) *cobra.Command {
 		registerIntegrations(cmd)
 		registerBoolPair(cmd, "focus", true, "Focus the workspace and change directory with shell integration", "Keep current workspace and shell directory")
 	}
+	for _, cmd := range []*cobra.Command{create, open, setup} {
+		registerVM(cmd)
+	}
 	open.ValidArgsFunction = completeRepository(dir, "open")
 	remove.ValidArgsFunction = completeRepository(dir, "delete")
 	setup.ValidArgsFunction = completeRepository(dir, "setup")
 	list.ValidArgsFunction = cobra.NoFileCompletions
-	root.AddCommand(create, open, list, remove, setup, shellInit())
+	root.AddCommand(create, open, list, remove, setup, shellInit(), vmCommand(dir))
 	return root
 }
 func interactive(cmd *cobra.Command) bool {
