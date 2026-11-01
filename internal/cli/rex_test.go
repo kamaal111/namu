@@ -31,6 +31,8 @@ func TestRexSelectionAndFocusFlags(t *testing.T) {
 		{"no-focus", "session:source", []string{"--no-focus"}, true, false},
 		{"focus-false", "session:source", []string{"--focus=false"}, true, false},
 		{"no-focus-false", "session:source", []string{"--no-focus=false"}, true, true},
+		{"focus-last", "session:source", []string{"--no-focus", "--focus"}, true, true},
+		{"no-focus-last", "session:source", []string{"--focus", "--no-focus"}, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := testutil.Repository(t)

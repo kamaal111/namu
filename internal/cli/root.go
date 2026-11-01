@@ -32,8 +32,7 @@ func service(cmd *cobra.Command, dir string) (*worktree.Service, error) {
 	s.Integration, s.Fallback = selected, shellIntegrationHooks()
 	if cmd.Flags().Lookup("focus") != nil {
 		focus, _ := cmd.Flags().GetBool("focus")
-		noFocus, _ := cmd.Flags().GetBool("no-focus")
-		s.NoFocus = !focus || noFocus
+		s.NoFocus = !focus
 	}
 	return s, nil
 }
@@ -104,13 +103,17 @@ func New(dir string) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		branches := make([]string, 0, len(trees))
-		for _, tree := range trees {
-			branches = append(branches, tree.Branch)
-		}
-		prs, err := github.PRNumbers(cmd.Context(), s.Repo.Source, branches)
-		if err != nil {
-			return err
+		var prs map[string]int
+		pr, _ := cmd.Flags().GetBool("pr")
+		if pr {
+			branches := make([]string, 0, len(trees))
+			for _, tree := range trees {
+				branches = append(branches, tree.Branch)
+			}
+			prs, err = github.PRNumbers(cmd.Context(), s.Repo.Source, branches)
+			if err != nil {
+				return err
+			}
 		}
 		w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
 		if len(prs) > 0 {
@@ -147,6 +150,7 @@ func New(dir string) *cobra.Command {
 		}
 		return w.Flush()
 	}}
+	registerBoolPair(list, "pr", true, "Look up GitHub PR numbers", "Skip GitHub PR lookup and hide the PR column")
 	remove := &cobra.Command{Use: "delete BRANCH [BRANCH...]", Short: "Remove clean registered checkouts, retaining their branches", Args: cobra.MinimumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		s, err := service(cmd, dir)
 		if err != nil {
@@ -178,9 +182,7 @@ func New(dir string) *cobra.Command {
 	for _, cmd := range []*cobra.Command{create, open} {
 		cmd.PreRunE = autoShellInstall
 		registerIntegrations(cmd)
-		cmd.Flags().Bool("focus", true, "Focus the workspace and change directory with shell integration")
-		cmd.Flags().Bool("no-focus", false, "Keep current workspace and shell directory")
-		cmd.MarkFlagsMutuallyExclusive("focus", "no-focus")
+		registerBoolPair(cmd, "focus", true, "Focus the workspace and change directory with shell integration", "Keep current workspace and shell directory")
 	}
 	open.ValidArgsFunction = completeRepository(dir, "open")
 	remove.ValidArgsFunction = completeRepository(dir, "delete")

@@ -71,6 +71,9 @@ namu delete feature/pricing feature/release
   updated merged or closed PR is shown. Unresolved and detached rows are blank.
   Missing `gh`, failed authentication, or lookup failures silently omit PR data;
   the column is hidden when no numbers resolve. PR lookup is limited to ten seconds.
+  Use `namu list --no-pr` or `namu list --pr=false` to skip GitHub requests and
+  hide the `PR` column. The last PR flag wins: `namu list --no-pr --pr` enables
+  lookup, and `--no-pr=false` also enables it.
 - `delete BRANCH [BRANCH...]` removes matching registered linked checkouts at any
   location, including checkouts created outside Namu, and **retains their branches**. Each unique branch is attempted in argument order;
   failures are reported together and make the command exit 1, while remaining
@@ -99,9 +102,11 @@ namu open feature/cards --no-focus
 
 Herdr creates checkouts at Namu's usual `.agents/worktrees/BRANCH` path and opens
 existing checkouts as workspaces. `--focus` is the default; `--no-focus` preserves
-Herdr's current workspace. These flags are mutually exclusive and also control
-shell navigation when the integration below is installed. `--focus=false` and
-`--no-focus=false` are supported.
+Herdr's current workspace. These flags also control shell navigation when the
+integration below is installed. The last flag wins: `--no-focus --focus` enables
+focus, and `--focus --no-focus` disables it. `--focus=false` disables focus;
+`--no-focus=false` enables it. This lets wrappers supply defaults that later
+arguments can override.
 
 If Herdr is unavailable or fails, Namu warns on stderr and falls back to Git.
 If Herdr already created the requested checkout or branch, Namu verifies its path,

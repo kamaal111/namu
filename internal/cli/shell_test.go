@@ -120,6 +120,9 @@ func TestShellIntegrationWithRealCLIAndBothBackends(t *testing.T) {
 			{name: "herdr-fallback", flags: []string{"--herdr"}, body: "exit 7", navigate: true, warning: true},
 			{name: "herdr-no-focus", flags: []string{"--herdr", "--no-focus"}, body: `"$REAL_GIT" -C "$source" worktree add "$target" "$branch"`},
 			{name: "git-no-focus", flags: []string{"--herdr=false", "--focus=false"}},
+			{name: "git-focus-last", flags: []string{"--herdr=false", "--no-focus", "--focus"}, navigate: true},
+			{name: "git-no-focus-last", flags: []string{"--herdr=false", "--focus", "--no-focus"}},
+			{name: "git-negative-false-last", flags: []string{"--herdr=false", "--focus=false", "--no-focus=false"}, navigate: true},
 		} {
 			for _, action := range []string{"create", "open", "existing"} {
 				t.Run(shell+"/"+tc.name+"/"+action, func(t *testing.T) {
@@ -202,6 +205,12 @@ func TestAutomaticShellInstallInTerminal(t *testing.T) {
 		{name: "loaded", shell: "zsh", marker: "1", args: []string{"open", "feature/cards"}},
 		{name: "no-focus", shell: "zsh", args: []string{"open", "feature/cards", "--no-focus"}},
 		{name: "focus-false", shell: "zsh", args: []string{"open", "feature/cards", "--focus=false"}},
+		{name: "open-focus-last", shell: "zsh", answer: "no\n", args: []string{"open", "feature/cards", "--no-focus", "--focus"}, prompt: true},
+		{name: "open-no-focus-last", shell: "zsh", args: []string{"open", "feature/cards", "--focus", "--no-focus"}},
+		{name: "open-negative-false-last", shell: "zsh", answer: "no\n", args: []string{"open", "feature/cards", "--focus=false", "--no-focus=false"}, prompt: true},
+		{name: "create-focus-last", shell: "zsh", answer: "no\n", args: []string{"create", "feature/new", "--base", "main", "--no-focus", "--focus"}, prompt: true},
+		{name: "create-no-focus-last", shell: "zsh", args: []string{"create", "feature/new", "--base", "main", "--focus", "--no-focus"}},
+		{name: "create-negative-false-last", shell: "zsh", answer: "no\n", args: []string{"create", "feature/new", "--base", "main", "--focus=false", "--no-focus=false"}, prompt: true},
 		{name: "redirected", shell: "zsh", args: []string{"open", "feature/cards"}, redirected: true},
 		{name: "unsupported", shell: "fish", args: []string{"open", "feature/cards"}},
 		{name: "help", shell: "zsh", args: []string{"open", "--help"}},
