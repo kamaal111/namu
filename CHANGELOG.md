@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/kamaal111/namu/compare/v0.6.0...v0.7.0) (2026-11-07)
+
+
+### Features
+
+* **vm:** add configurable VM worktrees and agent credential reuse ([fe03383](https://github.com/kamaal111/namu/commit/fe03383fdd4f4afca089ce1372cc0c525c4f6a8f))
+
 ## [0.6.0](https://github.com/kamaal111/namu/compare/v0.5.0...v0.6.0) (2026-11-01)
 
 
