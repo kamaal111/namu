@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/kamaal111/namu/compare/v0.7.0...v0.8.0) (2026-11-08)
+
+
+### Features
+
+* **cli:** support Nushell and portable list output ([6aa38d5](https://github.com/kamaal111/namu/commit/6aa38d5566217f29b82913ca9755aacd5b9453a1))
+
 ## [0.7.0](https://github.com/kamaal111/namu/compare/v0.6.0...v0.7.0) (2026-11-07)
 
 
