@@ -3,14 +3,11 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"github.com/kamaal111/namu/internal/pathdisplay"
 	"os"
 	"runtime/debug"
 	"strings"
-	"text/tabwriter"
 
 	git "github.com/kamaal111/namu/internal/git"
-	"github.com/kamaal111/namu/internal/github"
 	"github.com/kamaal111/namu/internal/ui"
 	"github.com/kamaal111/namu/internal/worktree"
 	"github.com/spf13/cobra"
@@ -90,66 +87,7 @@ func New(dir string) *cobra.Command {
 		}
 		return s.Open(cmd.Context(), selected)
 	}}
-	list := &cobra.Command{Use: "list", Short: "List all registered checkouts", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-		s, err := service(cmd, dir)
-		if err != nil {
-			return err
-		}
-		trees, err := git.Worktrees(cmd.Context(), s.Repo.Source)
-		if err != nil {
-			return err
-		}
-		var prs map[string]int
-		pr, _ := cmd.Flags().GetBool("pr")
-		if pr {
-			branches := make([]string, 0, len(trees))
-			for _, tree := range trees {
-				branches = append(branches, tree.Branch)
-			}
-			prs, err = github.PRNumbers(cmd.Context(), s.Repo.Source, branches)
-			if err != nil {
-				return err
-			}
-		}
-		w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-		if len(prs) > 0 {
-			fmt.Fprintln(w, "BRANCH\tPATH\tPR\tHEAD\tNOTES")
-		} else {
-			fmt.Fprintln(w, "BRANCH\tPATH\tHEAD\tNOTES")
-		}
-		for _, tree := range trees {
-			branch := tree.Branch
-			var notes []string
-			if branch == "" {
-				branch = "(detached)"
-				notes = append(notes, "No branch checked out")
-			}
-			if tree.Locked != "" {
-				notes = append(notes, "Locked against removal")
-			}
-			if tree.Prunable != "" {
-				notes = append(notes, "Stale worktree registration")
-			}
-			note := strings.Join(notes, "; ")
-			if note == "" {
-				note = "—"
-			}
-			fmt.Fprintf(w, "%s\t%s\t", branch, pathdisplay.Shorten(tree.Path))
-			if len(prs) > 0 {
-				pr := ""
-				if number := prs[tree.Branch]; number > 0 {
-					pr = fmt.Sprintf("#%d", number)
-				}
-				fmt.Fprintf(w, "%s\t", pr)
-			}
-			fmt.Fprintf(w, "%s\t%s\n", tree.Head, note)
-		}
-		return w.Flush()
-	}}
-	list.PreRunE = func(cmd *cobra.Command, _ []string) error {
-		return applyProjectDefaults(cmd, dir)
-	}
-	registerBoolPair(list, "pr", true, "Look up GitHub PR numbers", "Skip GitHub PR lookup and hide the PR column")
+	list := listCommand(dir)
 	remove := &cobra.Command{Use: "delete BRANCH [BRANCH...]", Short: "Remove clean registered checkouts, retaining their branches", Args: cobra.MinimumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		s, err := service(cmd, dir)
 		if err != nil {

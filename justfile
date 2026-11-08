@@ -47,3 +47,7 @@ vm-smoke name:
 # Download and verify pinned vendor sources for credential compatibility inspection
 vm-agent-sources:
     python3 scripts/vm-agent-sources.py
+
+# Evaluate Nushell with the project toolchain and no user configuration
+nu-eval code:
+    nu --no-config-file --commands {{ quote(code) }}

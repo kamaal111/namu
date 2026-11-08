@@ -11,16 +11,16 @@ import (
 func shellInit() *cobra.Command {
 	var install bool
 	cmd := &cobra.Command{
-		Use: "shell-init SHELL", Short: "Print shell integration for bash or zsh", Args: cobra.ExactArgs(1),
+		Use: "shell-init SHELL", Short: "Print shell integration for bash, zsh, or nu", Args: cobra.ExactArgs(1),
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, prefix string) ([]string, cobra.ShellCompDirective) {
 			if len(args) > 0 {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
-			return []string{"bash", "zsh"}, cobra.ShellCompDirectiveNoFileComp
+			return []string{"bash", "zsh", "nu"}, cobra.ShellCompDirectiveNoFileComp
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if args[0] != "bash" && args[0] != "zsh" {
-				return fmt.Errorf("unsupported shell %q; use bash or zsh", args[0])
+			if !supportedShell(args[0]) {
+				return fmt.Errorf("unsupported shell %q; use bash, zsh, or nu", args[0])
 			}
 			if install {
 				edits, err := prepareShellInstall(args[0])
@@ -34,6 +34,10 @@ func shellInit() *cobra.Command {
 					return err
 				}
 				return reloadShellInstruction(args[0], cmd.ErrOrStderr())
+			}
+			if args[0] == "nu" {
+				_, err := io.WriteString(cmd.OutOrStdout(), nuShellIntegration)
+				return err
 			}
 			if _, err := io.WriteString(cmd.OutOrStdout(), shellIntegration); err != nil {
 				return err
@@ -53,3 +57,10 @@ func shellInit() *cobra.Command {
 
 //go:embed scripts/shell-init.sh
 var shellIntegration string
+
+//go:embed scripts/shell-init.nu
+var nuShellIntegration string
+
+func supportedShell(shell string) bool {
+	return shell == "bash" || shell == "zsh" || shell == "nu"
+}
