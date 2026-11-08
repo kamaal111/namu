@@ -22,7 +22,7 @@ func TestShellInitOutsideRepository(t *testing.T) {
 		})
 	}
 	_, _, err := execute(t, t.TempDir(), "shell-init", "fish")
-	check(t, err != nil, "unsupported shell must fail")
+	check(t, err != nil && err.Error() == `unsupported shell "fish"; use bash, zsh, or nu`, "unsupported shell error")
 }
 
 func TestShellInitRegistersCompletion(t *testing.T) {

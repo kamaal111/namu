@@ -94,11 +94,31 @@ func TestShellInstallRespectsZdotdirAndSymlink(t *testing.T) {
 }
 
 func TestShellInstallRecognizesExistingEval(t *testing.T) {
+	for _, tc := range []struct{ shell, startup, eval string }{
+		{"bash", ".bashrc", "eval \"$(namu shell-init bash)\""},
+		{"bash", ".bashrc", "eval \"`namu shell-init bash`\""},
+		{"zsh", ".zshrc", "eval \"$(namu shell-init zsh)\""},
+		{"zsh", ".zshrc", "eval \"`namu shell-init zsh`\""},
+	} {
+		t.Run(tc.eval, func(t *testing.T) {
+			home := shellHome(t)
+			must(t, os.WriteFile(filepath.Join(home, tc.startup), []byte(tc.eval+"\n"), 0600))
+			edits, err := prepareShellInstall(tc.shell)
+			must(t, err)
+			check(t, edits[0].Addition == "", "existing initialization must not be duplicated")
+		})
+	}
+}
+
+func TestShellInstallBashLoginPrecedence(t *testing.T) {
 	home := shellHome(t)
-	must(t, os.WriteFile(filepath.Join(home, ".zshrc"), []byte("eval \"$(namu shell-init zsh)\"\n"), 0600))
-	edits, err := prepareShellInstall("zsh")
+	for _, name := range []string{".bash_profile", ".bash_login", ".profile"} {
+		must(t, os.WriteFile(filepath.Join(home, name), []byte("# existing\n"), 0600))
+	}
+	edits, err := prepareShellInstall("bash")
 	must(t, err)
-	check(t, edits[0].Addition == "", "existing initialization must not be duplicated")
+	check(t, len(edits) == 2, "two startup files")
+	check(t, edits[1].Path == filepath.Join(home, ".bash_profile"), edits[1].Path)
 }
 
 func TestShellInstallRejectsUnsupportedShellAndDirectory(t *testing.T) {

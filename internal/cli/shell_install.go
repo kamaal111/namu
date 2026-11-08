@@ -7,10 +7,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/kamaal111/namu/internal/pathdisplay"
 	"github.com/spf13/cobra"
@@ -26,43 +24,15 @@ type shellEdit struct {
 }
 
 func prepareShellInstall(shell string) ([]shellEdit, error) {
-	if !supportedShell(shell) {
-		return nil, fmt.Errorf("unsupported shell %q; use bash, zsh, or nu", shell)
-	}
-	if shell == "nu" {
-		return prepareNuShellInstall()
-	}
-	home, err := os.UserHomeDir()
+	definition, err := resolveShell(shell)
 	if err != nil {
 		return nil, err
 	}
-	paths := []string{filepath.Join(home, ".bashrc")}
-	if shell == "zsh" {
-		dir := os.Getenv("ZDOTDIR")
-		if dir == "" {
-			dir = home
-		}
-		paths = []string{filepath.Join(dir, ".zshrc")}
-	} else {
-		login := filepath.Join(home, ".bash_profile")
-		for _, name := range []string{".bash_profile", ".bash_login", ".profile"} {
-			path := filepath.Join(home, name)
-			_, err := os.Lstat(path)
-			if err == nil {
-				login = path
-				break
-			}
-			if !errors.Is(err, os.ErrNotExist) {
-				return nil, err
-			}
-		}
-		paths = append(paths, login)
-	}
+	return definition.prepareInstall()
+}
+
+func prepareEvalShellInstall(shell string, paths []string, guard string) ([]shellEdit, error) {
 	eval := fmt.Sprintf("eval \"$(namu shell-init %s)\"", shell)
-	guard := "command -v namu >/dev/null 2>&1"
-	if shell == "bash" {
-		guard = "[ -n \"${BASH_VERSION-}\" ] && " + guard
-	}
 	block := "# >>> namu shell integration >>>\nif " + guard + "; then\n  " + eval + "\nfi\n# <<< namu shell integration <<<\n"
 	var edits []shellEdit
 	seen := make(map[string]bool)
@@ -332,29 +302,4 @@ func readShellEdit(path string) (shellEdit, error) {
 		}
 	}
 	return edit, nil
-}
-
-func prepareNuShellInstall() ([]shellEdit, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	output, err := exec.CommandContext(ctx, "nu", "--no-config-file", "--commands", "$nu.user-autoload-dirs | first").Output()
-	if err != nil {
-		return nil, fmt.Errorf("cannot locate Nushell autoload directory: %w", err)
-	}
-	dir := strings.TrimSuffix(string(output), "\n")
-	if !filepath.IsAbs(dir) {
-		return nil, fmt.Errorf("Nushell autoload directory must be absolute: %q", dir)
-	}
-	edit, err := readShellEdit(filepath.Join(dir, "namu.nu"))
-	if err != nil {
-		return nil, err
-	}
-	if edit.Exists && !bytes.HasPrefix(edit.Before, []byte("# Managed by namu shell-init nu --install.")) {
-		return nil, fmt.Errorf("refusing to replace unmanaged Nushell integration: %s", pathdisplay.Shorten(edit.Path))
-	}
-	edit.Replace = true
-	if string(edit.Before) != nuShellIntegration {
-		edit.Addition = nuShellIntegration
-	}
-	return []shellEdit{edit}, nil
 }
