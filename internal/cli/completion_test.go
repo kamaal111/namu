@@ -42,6 +42,7 @@ func TestCompletion(t *testing.T) {
 		{"base", repo.Source, []string{"create", "new", "--base", "feature/"}, "feature/cards\n:4\n"},
 		{"remote-flag", repo.Source, []string{"create", "new", "--remote", "or"}, "origin\n:4\n"},
 		{"outside", t.TempDir(), []string{"open", ""}, ":4\n"},
+		{"shell-names", repo.Source, []string{"shell-init", ""}, "bash\nzsh\nnu\n:4\n"},
 		{"shell-limit", repo.Source, []string{"shell-init", "zsh", ""}, ":4\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
