@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/kamaal111/namu/internal/pathdisplay"
 	"github.com/spf13/cobra"
@@ -20,11 +22,15 @@ type shellEdit struct {
 	Before   []byte
 	Addition string
 	Exists   bool
+	Replace  bool
 }
 
 func prepareShellInstall(shell string) ([]shellEdit, error) {
-	if shell != "bash" && shell != "zsh" {
-		return nil, fmt.Errorf("unsupported shell %q; use bash or zsh", shell)
+	if !supportedShell(shell) {
+		return nil, fmt.Errorf("unsupported shell %q; use bash, zsh, or nu", shell)
+	}
+	if shell == "nu" {
+		return prepareNuShellInstall()
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -61,38 +67,16 @@ func prepareShellInstall(shell string) ([]shellEdit, error) {
 	var edits []shellEdit
 	seen := make(map[string]bool)
 	for _, path := range paths {
-		path, err = filepath.Abs(path)
+		edit, err := readShellEdit(path)
 		if err != nil {
 			return nil, err
 		}
-		_, err = os.Lstat(path)
-		exists := err == nil
-		if exists {
-			path, err = filepath.EvalSymlinks(path)
-			if err != nil {
-				return nil, err
-			}
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		}
+		path = edit.Path
 		if seen[path] {
 			continue
 		}
 		seen[path] = true
-		var before []byte
-		if exists {
-			info, err := os.Stat(path)
-			if err != nil {
-				return nil, err
-			}
-			if !info.Mode().IsRegular() {
-				return nil, fmt.Errorf("startup file is not a regular file: %s", pathdisplay.Shorten(path))
-			}
-			before, err = os.ReadFile(path)
-			if err != nil {
-				return nil, err
-			}
-		}
+		before := edit.Before
 		addition := block
 		for _, line := range strings.Split(string(before), "\n") {
 			trimmed := strings.TrimSpace(line)
@@ -104,7 +88,8 @@ func prepareShellInstall(shell string) ([]shellEdit, error) {
 		if addition != "" && len(before) > 0 && before[len(before)-1] != '\n' {
 			addition = "\n" + addition
 		}
-		edits = append(edits, shellEdit{Path: path, Before: before, Addition: addition, Exists: exists})
+		edit.Addition = addition
+		edits = append(edits, edit)
 	}
 	return edits, nil
 }
@@ -115,8 +100,14 @@ func previewShellInstall(edits []shellEdit, out io.Writer) error {
 			if _, err := fmt.Fprintf(out, "Already configured: %s\n", pathdisplay.Shorten(edit.Path)); err != nil {
 				return err
 			}
-		} else if _, err := fmt.Fprintf(out, "Will add to: %s\n%s", pathdisplay.Shorten(edit.Path), edit.Addition); err != nil {
-			return err
+		} else {
+			label := "Will add to"
+			if edit.Replace {
+				label = "Will write"
+			}
+			if _, err := fmt.Fprintf(out, "%s: %s\n%s", label, pathdisplay.Shorten(edit.Path), edit.Addition); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -141,7 +132,10 @@ func appendShellEdit(edit shellEdit, out io.Writer) (result error) {
 	if err := os.MkdirAll(filepath.Dir(edit.Path), 0700); err != nil {
 		return err
 	}
-	flags := os.O_RDWR | os.O_APPEND | unix.O_NOFOLLOW
+	flags := os.O_RDWR | unix.O_NOFOLLOW
+	if !edit.Replace {
+		flags |= os.O_APPEND
+	}
 	if !edit.Exists {
 		flags |= os.O_CREATE | os.O_EXCL
 	}
@@ -157,10 +151,21 @@ func appendShellEdit(edit shellEdit, out io.Writer) (result error) {
 	if !bytes.Equal(current, edit.Before) {
 		return fmt.Errorf("startup file changed since preview; retry installation")
 	}
+	if edit.Replace {
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+	}
 	n, writeErr := io.WriteString(f, edit.Addition)
+	if edit.Replace && writeErr == nil {
+		writeErr = f.Truncate(int64(n))
+	}
 	var reportErr error
 	if n > 0 {
 		label := "Added to"
+		if edit.Replace {
+			label = "Wrote"
+		}
 		if n != len(edit.Addition) {
 			label = "Partially added to"
 		}
@@ -273,7 +278,7 @@ func autoShellInstall(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 	shell := filepath.Base(os.Getenv("SHELL"))
-	if shell != "bash" && shell != "zsh" {
+	if !supportedShell(shell) {
 		return nil
 	}
 	err = offerShellInstall(cmd.Context(), shell, cmd.ErrOrStderr(), func() (bool, error) {
@@ -295,4 +300,61 @@ func terminalStream(stream any) bool {
 	}
 	_, err := unix.IoctlGetTermios(int(file.Fd()), terminalRequest())
 	return err == nil
+}
+
+func readShellEdit(path string) (shellEdit, error) {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return shellEdit{}, err
+	}
+	_, err = os.Lstat(path)
+	exists := err == nil
+	if exists {
+		path, err = filepath.EvalSymlinks(path)
+		if err != nil {
+			return shellEdit{}, err
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return shellEdit{}, err
+	}
+	edit := shellEdit{Path: path, Exists: exists}
+	if exists {
+		info, err := os.Stat(path)
+		if err != nil {
+			return shellEdit{}, err
+		}
+		if !info.Mode().IsRegular() {
+			return shellEdit{}, fmt.Errorf("startup file is not a regular file: %s", pathdisplay.Shorten(path))
+		}
+		edit.Before, err = os.ReadFile(path)
+		if err != nil {
+			return shellEdit{}, err
+		}
+	}
+	return edit, nil
+}
+
+func prepareNuShellInstall() ([]shellEdit, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, "nu", "--no-config-file", "--commands", "$nu.user-autoload-dirs | first").Output()
+	if err != nil {
+		return nil, fmt.Errorf("cannot locate Nushell autoload directory: %w", err)
+	}
+	dir := strings.TrimSuffix(string(output), "\n")
+	if !filepath.IsAbs(dir) {
+		return nil, fmt.Errorf("Nushell autoload directory must be absolute: %q", dir)
+	}
+	edit, err := readShellEdit(filepath.Join(dir, "namu.nu"))
+	if err != nil {
+		return nil, err
+	}
+	if edit.Exists && !bytes.HasPrefix(edit.Before, []byte("# Managed by namu shell-init nu --install.")) {
+		return nil, fmt.Errorf("refusing to replace unmanaged Nushell integration: %s", pathdisplay.Shorten(edit.Path))
+	}
+	edit.Replace = true
+	if string(edit.Before) != nuShellIntegration {
+		edit.Addition = nuShellIntegration
+	}
+	return []shellEdit{edit}, nil
 }

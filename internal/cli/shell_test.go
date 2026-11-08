@@ -196,6 +196,8 @@ func TestAutomaticShellInstallInTerminal(t *testing.T) {
 		code                                            int
 	}{
 		{name: "accept", shell: "zsh", answer: "yes\n", args: []string{"open", "feature/cards"}, prompt: true, installed: true},
+		{name: "accept-nu", shell: "nu", answer: "yes\n", args: []string{"open", "feature/cards"}, prompt: true, installed: true},
+		{name: "decline-nu", shell: "nu", answer: "no\n", args: []string{"open", "feature/cards"}, prompt: true},
 		{name: "accept-bash", shell: "bash", answer: "yes\n", args: []string{"create", "feature/new", "--base", "main"}, prompt: true, installed: true},
 		{name: "decline", shell: "zsh", answer: "no\n", args: []string{"open", "feature/cards"}, prompt: true},
 		{name: "eof", shell: "zsh", answer: "\x04", args: []string{"open", "feature/cards"}, prompt: true},
@@ -220,6 +222,7 @@ func TestAutomaticShellInstallInTerminal(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			home := shellHome(t)
+			t.Setenv("XDG_CONFIG_HOME", home)
 			repo := testutil.Repository(t)
 			testutil.Write(t, filepath.Join(repo.Source, ".namu.toml"), tc.config)
 			testutil.Git(t, repo.Source, "branch", "feature/cards")
@@ -247,10 +250,10 @@ func TestAutomaticShellInstallInTerminal(t *testing.T) {
 			must(t, json.Unmarshal(output, &result))
 			check(t, result.Code == tc.code, result.Output)
 			check(t, strings.Contains(result.Output, "Install shell integration with these changes?") == tc.prompt, result.Output)
-			startup := map[string]string{"zsh": ".zshrc", "bash": ".bashrc", "fish": ".zshrc"}[tc.shell]
+			startup := map[string]string{"zsh": ".zshrc", "bash": ".bashrc", "fish": ".zshrc", "nu": filepath.Join("nushell", "autoload", "namu.nu")}[tc.shell]
 			_, err = os.Stat(filepath.Join(home, startup))
 			check(t, (err == nil) == tc.installed, result.Output)
-			check(t, strings.Contains(result.Output, "Added to:") == tc.installed, result.Output)
+			check(t, (strings.Contains(result.Output, "Added to:") || strings.Contains(result.Output, "Wrote:")) == tc.installed, result.Output)
 		})
 	}
 }

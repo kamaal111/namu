@@ -23,6 +23,8 @@ jobs:
           mise exec -- go version
           mise exec -- python3 --version
           mise exec -- just --version
+          mise exec -- nu --version
+          mise exec -- jq --version
       - name: Install shell integration test dependency
         if: runner.os == 'Linux'
         run: |

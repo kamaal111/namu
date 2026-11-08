@@ -74,6 +74,14 @@ namu delete feature/pricing feature/release
   Use `namu list --no-pr` or `namu list --pr=false` to skip GitHub requests and
   hide the `PR` column. The last PR flag wins: `namu list --no-pr --pr` enables
   lookup, and `--no-pr=false` also enables it.
+  Use `namu list --table | less` for a readable paged table, or
+  `namu list --json | jq -r '.[].branch'` for JSON processing. Both formats
+  work in every supported shell. `--table` and `--json` are mutually exclusive;
+  piping or redirecting alone does not change the executable's text output.
+  JSON is an array of records with `branch` (string or null for detached HEAD),
+  absolute `path`, full `head`, `pr` (integer or null), and `notes` (string array).
+  Disabled or unavailable PR lookup produces null PRs; ordinary rows have empty
+  notes arrays. Record order matches the text table.
 - `delete BRANCH [BRANCH...]` removes matching registered linked checkouts at any
   location, including checkouts created outside Namu, and **retains their branches**. Each unique branch is attempted in argument order;
   failures are reported together and make the command exit 1, while remaining
@@ -173,6 +181,39 @@ namu open failing-to-open --no-focus
 ```
 
 ## Paths and shell use
+
+Bash, Zsh, and Nushell support directory navigation and command, flag, and branch
+completion through `shell-init`. For Nushell 0.116.1 or newer, install with:
+
+```nu
+namu shell-init nu --install
+```
+
+Restart Nu after installation. The installer previews and writes a managed
+`namu.nu` in Nu's user autoload directory, respecting Nu's platform-specific
+configuration paths and `XDG_CONFIG_HOME`. It preserves unrelated configuration
+and refuses to replace an unmanaged file. Run the installer again after updating
+Namu to refresh the script. `namu shell-init nu` prints the sourceable script
+without installing it; save it to a file and `source` that file in a later command
+if managing your own configuration.
+
+With the integration loaded, plain `namu list` returns native Nu records:
+
+```nu
+namu list | where pr != null | select branch pr
+namu list | sort-by branch | table | less -R
+namu list | explore
+```
+
+Explicit formats return text, so external tools work the same way in every shell:
+
+```nu
+namu list --table | less
+namu list --json | jq -r '.[].branch'
+```
+
+Use `^namu` to bypass the Nu wrapper. Create/open navigate only when Namu reports
+a successful shell-navigation result; `--no-focus` keeps the current directory.
 
 `create` and `open` write exactly one checkout path and a newline to stdout as soon
 as Git creates or identifies the checkout, before file copying or setup. Paths
